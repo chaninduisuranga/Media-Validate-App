@@ -1,6 +1,6 @@
 module github.com/mediavalidate/go_server
 
-go 1.25.7
+go 1.24.0
 
 require (
 	github.com/google/uuid v1.6.0
