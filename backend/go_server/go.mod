@@ -1,8 +1,8 @@
 module github.com/mediavalidate/go_server
 
-go 1.24.0
+go 1.25.0
 
-toolchain go1.24.0
+toolchain go1.25.0
 
 require (
 	github.com/jackc/pgx/v5 v5.9.2
