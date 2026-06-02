@@ -28,6 +28,11 @@ COPY ./backend/python_model_api /app/backend/python_model_api
 # Expose the API port
 EXPOSE 8005
 
+# Add non-root user required by WSO2 Choreo
+RUN groupadd -r choreouser && useradd -r -g choreouser -u 10014 choreouser
+RUN chown -R choreouser:choreouser /app /models
+USER 10014
+
 # Run the application
 WORKDIR /app/backend/python_model_api
 CMD ["python", "main.py"]
