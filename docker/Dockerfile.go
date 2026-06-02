@@ -10,6 +10,8 @@ RUN go mod download
 # Copy source code
 COPY backend/go_server/ .
 
+RUN go mod tidy
+
 # Build the application
 RUN go build -o main .
 
