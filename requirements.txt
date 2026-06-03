@@ -10,3 +10,6 @@ pillow
 tqdm
 tabulate
 ipykernel
+fastapi
+uvicorn
+python-multipart
