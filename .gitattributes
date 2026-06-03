@@ -1,4 +1,2 @@
 # Auto detect text files and perform LF normalization
 * text=auto
-models/efficientnet_model.keras filter=lfs diff=lfs merge=lfs -text
-models/cifake_efficientnet.keras filter=lfs diff=lfs merge=lfs -text

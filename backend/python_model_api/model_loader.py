@@ -5,8 +5,10 @@ import numpy as np
 
 # EfficientNetB0 standard resolution
 IMAGE_SIZE = (224, 224)
-FACE_MODEL_PATH = os.path.join("..", "..", "models", "efficientnet_model.keras")
-SCENE_MODEL_PATH = os.path.join("..", "..", "models", "cifake_efficientnet.keras")
+# Use absolute path detection to find models regardless of where the script is run
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+FACE_MODEL_PATH = os.path.join(BASE_DIR, "models", "efficientnet_model.keras")
+SCENE_MODEL_PATH = os.path.join(BASE_DIR, "models", "cifake_efficientnet.keras")
 
 try:
     face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
