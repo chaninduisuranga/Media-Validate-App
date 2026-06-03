@@ -70,8 +70,8 @@ class _SignupScreenState extends State<SignupScreen> {
       }
     } catch (e) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Connection refused by server'),
+        SnackBar(
+          content: Text('Error: $e'),
           backgroundColor: AppColors.danger,
           behavior: SnackBarBehavior.floating,
         ),

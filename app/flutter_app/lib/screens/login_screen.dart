@@ -44,7 +44,7 @@ class _LoginScreenState extends State<LoginScreen> {
         _showError(response['message'] ?? 'Authentication failed');
       }
     } catch (e) {
-      _showError('Connection refused by server');
+      _showError('Error: $e');
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }

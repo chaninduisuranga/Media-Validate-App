@@ -190,12 +190,14 @@ func handleValidation(c echo.Context) error {
 			mediaType = "video"
 		}
 		
-		pred := pythonResponse["prediction"].(string)
-		conf, _ := pythonResponse["confidence"].(float64)
+		pred, ok1 := pythonResponse["prediction"].(string)
+		conf, ok2 := pythonResponse["confidence"].(float64)
 
-		handlers.DBPool.Exec(context.Background(), 
-			"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
-			userID, mediaType, file.Filename, pred, conf)
+		if ok1 && ok2 {
+			handlers.DBPool.Exec(context.Background(), 
+				"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
+				userID, mediaType, file.Filename, pred, conf)
+		}
 	}
 
 	return c.JSON(resp.StatusCode, pythonResponse)

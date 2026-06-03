@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/labstack/echo/v4"
 )
@@ -67,12 +68,12 @@ func GetHistoryHandler(c echo.Context) error {
 	}
 
 	type HistoryItem struct {
-		ID         int64   `json:"id"`
-		MediaType  string  `json:"media_type"`
-		Filename   string  `json:"filename"`
-		Result     string  `json:"result"`
-		Confidence float64 `json:"confidence"`
-		CreatedAt  string  `json:"created_at"`
+		ID         int64     `json:"id"`
+		MediaType  string    `json:"media_type"`
+		Filename   string    `json:"filename"`
+		Result     string    `json:"result"`
+		Confidence float64   `json:"confidence"`
+		CreatedAt  time.Time `json:"created_at"`
 	}
 
 	rows, err := DBPool.Query(context.Background(),
