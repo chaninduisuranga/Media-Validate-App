@@ -20,7 +20,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 # Copy the model files (MesoNet)
 # In Choreo, we need to ensure the models are part of the image
-COPY ./models /models
+COPY ./models /app/models
 
 # Copy application code
 COPY ./backend/python_model_api /app/backend/python_model_api
