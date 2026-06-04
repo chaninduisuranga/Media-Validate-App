@@ -171,13 +171,44 @@ func handleValidation(c echo.Context) error {
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// Send request to Python
+	// Send request to Python with retry logic for Choreo cold-start
 	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
 	client := &http.Client{Timeout: 120 * time.Second}
-	resp, err := client.Do(req)
+	
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// Need to recreate request body for each retry
+		if attempt > 1 {
+			fmt.Printf("--- Retry attempt %d/%d (Python API cold-start) ---\n", attempt, maxRetries)
+			time.Sleep(time.Duration(attempt*5) * time.Second)
+			
+			// Rebuild the multipart body for retry
+			retryBody := &bytes.Buffer{}
+			retryWriter := multipart.NewWriter(retryBody)
+			retryPart, _ := retryWriter.CreateFormFile("file", file.Filename)
+			retryPart.Write(fileBytes)
+			retryWriter.Close()
+			
+			req, _ = http.NewRequest("POST", PythonApiUrl, retryBody)
+			req.Header.Set("Content-Type", retryWriter.FormDataContentType())
+		}
+		
+		resp, err = client.Do(req)
+		if err == nil && resp.StatusCode != 503 {
+			break // Success
+		}
+		if err != nil {
+			fmt.Printf("Python API attempt %d error: %v\n", attempt, err)
+		} else if resp.StatusCode == 503 {
+			fmt.Printf("Python API attempt %d: models still loading (503)\n", attempt)
+			resp.Body.Close()
+		}
+	}
+	
 	if err != nil {
-		fmt.Printf("Python API connection error: %v\n", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI service error: %v", err))
+		fmt.Printf("Python API connection failed after %d attempts: %v\n", maxRetries, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI service error after %d retries: %v", maxRetries, err))
 	}
 	defer resp.Body.Close()
 
