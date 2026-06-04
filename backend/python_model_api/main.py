@@ -53,6 +53,7 @@ async def predict(file: UploadFile = File(...)):
 
     contents = await file.read()
     filename = file.filename.lower()
+    print(f"--- Received file for prediction: {filename} ({len(contents)} bytes) ---")
 
 
     # Determine if it's an image or video
@@ -83,6 +84,7 @@ async def predict(file: UploadFile = File(...)):
             }
 
         try:
+            print("--- Preprocessing image... ---")
             img_tensor, face_found = preprocess_image(contents)
             
             if face_found:
@@ -93,6 +95,8 @@ async def predict(file: UploadFile = File(...)):
                 print("--- ROUTING TO SCENE MODEL (CIFAKE) ---")
                 prediction = scene_model.predict(img_tensor)[0][0]
                 used_model = "scene_cifake"
+                
+            print(f"--- Inference Complete. Raw prediction: {prediction} ---")
                 
         except Exception as e:
             print(f"DEBUG Error in image: {e}")

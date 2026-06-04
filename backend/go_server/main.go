@@ -214,8 +214,10 @@ func handleValidation(c echo.Context) error {
 
 	// Parse python response and attach our structural Go findings
 	var pythonResponse map[string]interface{}
-	if err := json.NewDecoder(resp.Body).Decode(&pythonResponse); err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to parse AI response")
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(bodyBytes, &pythonResponse); err != nil {
+		fmt.Printf("Failed to parse AI response. Status: %d, Raw Body: %s\n", resp.StatusCode, string(bodyBytes))
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI response error (status %d): check logs for body", resp.StatusCode))
 	}
 	
 	pythonResponse["go_results"] = goResults
