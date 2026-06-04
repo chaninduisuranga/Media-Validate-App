@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/joho/godotenv"
@@ -51,6 +52,9 @@ func main() {
 			fmt.Println("Connected to Supabase PostgreSQL successfully")
 		}
 	}
+
+	// Log Python API URL for debugging
+	fmt.Printf("PYTHON_API_URL configured as: %s\n", PythonApiUrl)
 
 	e := echo.New()
 
@@ -165,10 +169,12 @@ func handleValidation(c echo.Context) error {
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
 	// Send request to Python
-	client := &http.Client{}
+	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
+	client := &http.Client{Timeout: 120 * time.Second}
 	resp, err := client.Do(req)
 	if err != nil {
-		return echo.NewHTTPError(http.StatusInternalServerError, "Error connecting to AI inference service")
+		fmt.Printf("Python API connection error: %v\n", err)
+		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI service error: %v", err))
 	}
 	defer resp.Body.Close()
 

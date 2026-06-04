@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -77,7 +78,7 @@ func GetHistoryHandler(c echo.Context) error {
 	}
 
 	rows, err := DBPool.Query(context.Background(),
-		`SELECT id, media_type, filename, result, confidence, created_at
+		`SELECT id, COALESCE(media_type,'photo'), COALESCE(filename,'unknown'), COALESCE(result,'unknown'), COALESCE(confidence,0), COALESCE(created_at, NOW())
 		 FROM user_usage
 		 WHERE user_id = $1
 		 ORDER BY created_at DESC
@@ -85,7 +86,8 @@ func GetHistoryHandler(c echo.Context) error {
 		userID,
 	)
 	if err != nil {
-		return c.JSON(http.StatusInternalServerError, map[string]interface{}{"success": false, "message": "Failed to fetch history"})
+		fmt.Printf("History query error: %v\n", err)
+		return c.JSON(http.StatusInternalServerError, map[string]interface{}{"success": false, "message": fmt.Sprintf("DB error: %v", err)})
 	}
 	defer rows.Close()
 
@@ -93,6 +95,7 @@ func GetHistoryHandler(c echo.Context) error {
 	for rows.Next() {
 		var item HistoryItem
 		if err := rows.Scan(&item.ID, &item.MediaType, &item.Filename, &item.Result, &item.Confidence, &item.CreatedAt); err != nil {
+			fmt.Printf("History scan error: %v\n", err)
 			continue
 		}
 		history = append(history, item)
