@@ -18,23 +18,37 @@ except Exception as e:
 
 def load_models():
     """Loads both the Face and CIFAKE Scene models."""
-    abs_face_path = os.path.abspath(os.path.join(os.path.dirname(__file__), FACE_MODEL_PATH))
-    abs_scene_path = os.path.abspath(os.path.join(os.path.dirname(__file__), SCENE_MODEL_PATH))
+    # FACE_MODEL_PATH and SCENE_MODEL_PATH are already absolute paths (built from BASE_DIR)
+    # DO NOT join with dirname(__file__) again - that creates a broken double path
+    print(f"BASE_DIR resolved to: {BASE_DIR}")
+    print(f"Looking for Face Model at: {FACE_MODEL_PATH}")
+    print(f"Looking for Scene Model at: {SCENE_MODEL_PATH}")
+    
+    # Debug: List what's actually in the models directory
+    models_dir = os.path.join(BASE_DIR, "models")
+    if os.path.exists(models_dir):
+        print(f"Contents of {models_dir}: {os.listdir(models_dir)}")
+    else:
+        print(f"WARNING: Models directory does not exist: {models_dir}")
+        # Try alternative paths inside the container
+        for alt in ["/app/models", "/app/backend/python_model_api/models", "/models"]:
+            if os.path.exists(alt):
+                print(f"FOUND alternative models dir: {alt} -> {os.listdir(alt)}")
     
     face_model = None
     scene_model = None
     
-    if os.path.exists(abs_face_path):
-        face_model = tf.keras.models.load_model(abs_face_path)
-        print(f"Face Model loaded successfully from {abs_face_path}")
+    if os.path.exists(FACE_MODEL_PATH):
+        face_model = tf.keras.models.load_model(FACE_MODEL_PATH)
+        print(f"Face Model loaded successfully from {FACE_MODEL_PATH}")
     else:
-        print(f"Warning: Face Model file not found at {abs_face_path}")
+        print(f"ERROR: Face Model file not found at {FACE_MODEL_PATH}")
         
-    if os.path.exists(abs_scene_path):
-        scene_model = tf.keras.models.load_model(abs_scene_path)
-        print(f"CIFAKE Scene Model loaded successfully from {abs_scene_path}")
+    if os.path.exists(SCENE_MODEL_PATH):
+        scene_model = tf.keras.models.load_model(SCENE_MODEL_PATH)
+        print(f"CIFAKE Scene Model loaded successfully from {SCENE_MODEL_PATH}")
     else:
-        print(f"Warning: CIFAKE Model file not found at {abs_scene_path}")
+        print(f"ERROR: CIFAKE Model file not found at {SCENE_MODEL_PATH}")
         
     return face_model, scene_model
 

@@ -5,6 +5,7 @@ import numpy as np
 import cv2
 import io
 import os
+import threading
 from model_loader import load_models, preprocess_image
 from advanced_detection import check_exif_data, calculate_ela_score
 
@@ -21,26 +22,38 @@ app.add_middleware(
 # Global model instances
 face_model = None
 scene_model = None
+models_loaded = False
+
+def _load_models_background():
+    """Load models in background thread so health checks pass immediately."""
+    global face_model, scene_model, models_loaded
+    try:
+        print("--- Starting AI Model Initialization (Background Thread) ---")
+        face_model, scene_model = load_models()
+        models_loaded = True
+        print("--- AI Model Initialization Complete ---")
+    except Exception as e:
+        print(f"CRITICAL: Model loading failed: {e}")
 
 @app.on_event("startup")
 def startup_event():
-    global face_model, scene_model
-    print("--- Starting AI Model Initialization ---")
-    face_model, scene_model = load_models()
-    print("--- AI Model Initialization Complete ---")
+    print("--- FastAPI Server Starting (models will load in background) ---")
+    thread = threading.Thread(target=_load_models_background, daemon=True)
+    thread.start()
 
 @app.get("/")
 def read_root():
-    return {"message": "MesoNet Inference API is running"}
+    return {"message": "MesoNet Inference API is running", "models_loaded": models_loaded}
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
     global face_model, scene_model
-    if face_model is None or scene_model is None:
-        raise HTTPException(status_code=500, detail="Models not loaded")
+    if not models_loaded or face_model is None or scene_model is None:
+        raise HTTPException(status_code=503, detail="Models are still loading, please retry in 30 seconds")
 
     contents = await file.read()
     filename = file.filename.lower()
+
 
     # Determine if it's an image or video
     if filename.endswith(('.png', '.jpg', '.jpeg', '.webp')):
