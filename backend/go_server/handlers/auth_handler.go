@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -52,9 +53,24 @@ func InitDB(pool *pgxpool.Pool) {
 		created_at TIMESTAMPTZ DEFAULT NOW()
 	);`
 
+	// Migrations: Ensure created_at exists in case tables were created with an older schema
+	migrations := []string{
+		"ALTER TABLE users ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();",
+		"ALTER TABLE users ADD COLUMN IF NOT EXISTS update_at TIMESTAMPTZ DEFAULT NOW();",
+		"ALTER TABLE user_usage ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();",
+		"ALTER TABLE ratings ADD COLUMN IF NOT EXISTS created_at TIMESTAMPTZ DEFAULT NOW();",
+	}
+
 	DBPool.Exec(context.Background(), userTable)
 	DBPool.Exec(context.Background(), ratingsTable)
 	DBPool.Exec(context.Background(), usageTable)
+
+	for _, m := range migrations {
+		_, err := DBPool.Exec(context.Background(), m)
+		if err != nil {
+			fmt.Printf("Migration warning: %v\n", err)
+		}
+	}
 }
 
 func SignupHandler(c echo.Context) error {
