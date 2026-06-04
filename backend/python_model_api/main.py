@@ -25,7 +25,9 @@ scene_model = None
 @app.on_event("startup")
 def startup_event():
     global face_model, scene_model
+    print("--- Starting AI Model Initialization ---")
     face_model, scene_model = load_models()
+    print("--- AI Model Initialization Complete ---")
 
 @app.get("/")
 def read_root():

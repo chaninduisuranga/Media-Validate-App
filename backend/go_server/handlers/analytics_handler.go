@@ -94,13 +94,15 @@ func GetHistoryHandler(c echo.Context) error {
 	history := []HistoryItem{}
 	for rows.Next() {
 		var item HistoryItem
-		if err := rows.Scan(&item.ID, &item.MediaType, &item.Filename, &item.Result, &item.Confidence, &item.CreatedAt); err != nil {
-			fmt.Printf("History scan error: %v\n", err)
+		err := rows.Scan(&item.ID, &item.MediaType, &item.Filename, &item.Result, &item.Confidence, &item.CreatedAt)
+		if err != nil {
+			fmt.Printf("SCAN ERROR on history item (ID?): %v\n", err)
 			continue
 		}
 		history = append(history, item)
 	}
 
+	fmt.Printf("Successfully fetched %d history items for user %d\n", len(history), userID)
 	return c.JSON(http.StatusOK, map[string]interface{}{
 		"success": true,
 		"history": history,

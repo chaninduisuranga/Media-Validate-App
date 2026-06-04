@@ -87,10 +87,13 @@ func main() {
 
 func handleValidation(c echo.Context) error {
 	// 1. Read file from request
+	fmt.Println("--- Received Validate Request ---")
 	file, err := c.FormFile("file")
 	if err != nil {
+		fmt.Printf("Validation failed: form file error: %v\n", err)
 		return echo.NewHTTPError(http.StatusBadRequest, "File is required")
 	}
+	fmt.Printf("Validating file: %s (%d bytes)\n", file.Filename, file.Size)
 
 	src, err := file.Open()
 	if err != nil {
