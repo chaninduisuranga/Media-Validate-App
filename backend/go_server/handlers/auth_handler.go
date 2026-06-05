@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -140,6 +141,21 @@ func LoginHandler(c echo.Context) error {
 	if err := bcrypt.CompareHashAndPassword([]byte(hashedPassword), []byte(req.Password)); err != nil {
 		return c.JSON(http.StatusUnauthorized, models.AuthResponse{Success: false, Message: "Invalid email or password"})
 	}
+
+	// Success - trigger background warmup of Python API early
+	go func() {
+		pythonURL := os.Getenv("PYTHON_API_URL")
+		if pythonURL != "" {
+			// Extract base URL (remove /predict if present)
+			baseURL := pythonURL
+			if i := len(pythonURL) - 8; i > 0 && pythonURL[i:] == "/predict" {
+				baseURL = pythonURL[:i]
+			}
+			fmt.Printf("Triggering Early-Ping warmup to: %s\n", baseURL)
+			client := &http.Client{Timeout: 5 * time.Second}
+			client.Get(baseURL) // Non-blocking, we don't care about the result
+		}
+	}()
 
 	return c.JSON(http.StatusOK, models.AuthResponse{
 		Success: true,

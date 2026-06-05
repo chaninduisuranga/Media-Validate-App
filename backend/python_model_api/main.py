@@ -6,6 +6,14 @@ import cv2
 import io
 import os
 import threading
+import gc
+import psutil
+
+# FORCE CPU MODE - Save RAM and initialization time
+os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3" 
+import tensorflow as tf
+
 from model_loader import load_models, preprocess_image
 from advanced_detection import check_exif_data, calculate_ela_score
 
@@ -28,10 +36,16 @@ def _load_models_background():
     """Load models in background thread so health checks pass immediately."""
     global face_model, scene_model, models_loaded
     try:
-        print("--- Starting AI Model Initialization (Background Thread) ---")
+        process = psutil.Process(os.getpid())
+        mem_init = process.memory_info().rss / 1024 / 1024
+        print(f"--- Starting AI Model Initialization (Background Thread) | Initial RAM: {mem_init:.2f}MB ---")
+        
         face_model, scene_model = load_models()
         models_loaded = True
-        print("--- AI Model Initialization Complete ---")
+        
+        mem_final = process.memory_info().rss / 1024 / 1024
+        print(f"--- AI Model Initialization Complete | Total RAM: {mem_final:.2f}MB ---")
+        gc.collect() # Immediate cleanup
     except Exception as e:
         print(f"CRITICAL: Model loading failed: {e}")
 

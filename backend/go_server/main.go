@@ -217,6 +217,10 @@ func handleValidation(c echo.Context) error {
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if err := json.Unmarshal(bodyBytes, &pythonResponse); err != nil {
 		fmt.Printf("Failed to parse AI response. Status: %d, Raw Body: %s\n", resp.StatusCode, string(bodyBytes))
+		// If it's a 503, return it as a 503 to the app
+		if resp.StatusCode == http.StatusServiceUnavailable {
+			return echo.NewHTTPError(http.StatusServiceUnavailable, "AI models are still loading, please wait 30 seconds")
+		}
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI response error (status %d): check logs for body", resp.StatusCode))
 	}
 	
