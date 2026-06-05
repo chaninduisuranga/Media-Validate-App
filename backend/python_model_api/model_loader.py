@@ -39,13 +39,13 @@ def load_models():
     scene_model = None
     
     if os.path.exists(FACE_MODEL_PATH):
-        face_model = tf.keras.models.load_model(FACE_MODEL_PATH)
+        face_model = tf.keras.models.load_model(FACE_MODEL_PATH, compile=False)
         print(f"Face Model loaded successfully from {FACE_MODEL_PATH}")
     else:
         print(f"ERROR: Face Model file not found at {FACE_MODEL_PATH}")
         
     if os.path.exists(SCENE_MODEL_PATH):
-        scene_model = tf.keras.models.load_model(SCENE_MODEL_PATH)
+        scene_model = tf.keras.models.load_model(SCENE_MODEL_PATH, compile=False)
         print(f"CIFAKE Scene Model loaded successfully from {SCENE_MODEL_PATH}")
     else:
         print(f"ERROR: CIFAKE Model file not found at {SCENE_MODEL_PATH}")

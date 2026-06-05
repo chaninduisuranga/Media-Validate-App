@@ -176,7 +176,7 @@ func handleValidation(c echo.Context) error {
 	client := &http.Client{Timeout: 120 * time.Second}
 	
 	var resp *http.Response
-	maxRetries := 3
+	maxRetries := 10
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Need to recreate request body for each retry
 		if attempt > 1 {
