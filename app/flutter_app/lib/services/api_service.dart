@@ -11,8 +11,8 @@ class ApiService {
   static Future<Map<String, dynamic>> _safeRequest(
     Future<http.Response> Function() requestFn, {
     int retries = 3,
+    Duration timeout = const Duration(seconds: 30),
   }) async {
-    Duration timeout = const Duration(seconds: 60);
     Exception? lastException;
 
     for (int i = 0; i < retries; i++) {
@@ -37,17 +37,24 @@ class ApiService {
     File file,
     dynamic userId,
   ) async {
-    return _safeRequest(() async {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('$baseUrl/validate'),
-      );
-      request.files.add(await http.MultipartFile.fromPath('file', file.path));
-      request.fields['user_id'] = userId.toString();
+    // Use a longer timeout (3 min) because the Go server relays to Hugging Face
+    // which may take 30-90s. Retries kept to 1 to avoid duplicate HF requests.
+    return _safeRequest(
+      () async {
+        var request = http.MultipartRequest(
+          'POST',
+          Uri.parse('$baseUrl/validate'),
+        );
+        request.files
+            .add(await http.MultipartFile.fromPath('file', file.path));
+        request.fields['user_id'] = userId.toString();
 
-      var streamedResponse = await request.send();
-      return await http.Response.fromStream(streamedResponse);
-    });
+        var streamedResponse = await request.send();
+        return await http.Response.fromStream(streamedResponse);
+      },
+      timeout: const Duration(minutes: 3),
+      retries: 1,
+    );
   }
 
   static Future<Map<String, dynamic>> signup(Map<String, dynamic> data) async {

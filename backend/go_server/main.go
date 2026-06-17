@@ -173,15 +173,16 @@ func handleValidation(c echo.Context) error {
 
 	// Send request to Python with retry logic for Choreo cold-start
 	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
-	client := &http.Client{Timeout: 300 * time.Second}
+	// 120s per-request timeout; Flutter allows 3 minutes total
+	client := &http.Client{Timeout: 120 * time.Second}
 	
 	var resp *http.Response
-	maxRetries := 10
+	maxRetries := 3
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		// Need to recreate request body for each retry
 		if attempt > 1 {
 			fmt.Printf("--- Retry attempt %d/%d (Python API cold-start) ---\n", attempt, maxRetries)
-			time.Sleep(time.Duration(attempt*5) * time.Second)
+			time.Sleep(3 * time.Second) // Flat 3s delay so we stay within Flutter's 3-min window
 			
 			// Rebuild the multipart body for retry
 			retryBody := &bytes.Buffer{}
