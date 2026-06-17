@@ -60,12 +60,12 @@ def read_root():
     return {"message": "MesoNet Inference API is running", "models_loaded": models_loaded}
 
 @app.post("/predict")
-async def predict(file: UploadFile = File(...)):
+def predict(file: UploadFile = File(...)):
     global face_model, scene_model
     if not models_loaded or face_model is None or scene_model is None:
         raise HTTPException(status_code=503, detail="Models are still loading, please retry in 30 seconds")
 
-    contents = await file.read()
+    contents = file.file.read()
     filename = file.filename.lower()
     print(f"--- Received file for prediction: {filename} ({len(contents)} bytes) ---")
 

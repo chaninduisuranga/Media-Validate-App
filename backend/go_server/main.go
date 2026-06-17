@@ -173,7 +173,7 @@ func handleValidation(c echo.Context) error {
 
 	// Send request to Python with retry logic for Choreo cold-start
 	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 300 * time.Second}
 	
 	var resp *http.Response
 	maxRetries := 10
