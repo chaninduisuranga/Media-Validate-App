@@ -64,7 +64,10 @@ func main() {
 	e.Use(middleware.CORS())
 
 	// Routes
-	e.GET("/", func(c echo.Context) error { return c.String(http.StatusOK, "Media Validate Go Backend is running") })
+	e.GET("/", func(c echo.Context) error {
+		return c.String(http.StatusOK, "Media Validate Go Backend is running")
+	})
+
 	e.POST("/api/validate", handleValidation)
 	e.POST("/api/signup", handlers.SignupHandler)
 	e.POST("/api/login", handlers.LoginHandler)
@@ -141,10 +144,10 @@ func handleValidation(c echo.Context) error {
 			if strings.HasPrefix(mimeType, "video") || strings.HasSuffix(file.Filename, ".mp4") {
 				mediaType = "video"
 			}
-			handlers.DBPool.Exec(context.Background(),
+			handlers.DBPool.Exec(context.Background(), 
 				"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
 				userID, mediaType, file.Filename, "edited", 99.0)
-			}
+		}
 
 		return c.JSON(http.StatusOK, finalResult)
 	}
@@ -156,6 +159,7 @@ func handleValidation(c echo.Context) error {
 	if err != nil {
 		return err
 	}
+	
 	if _, err = part.Write(fileBytes); err != nil {
 		return err
 	}
@@ -167,17 +171,21 @@ func handleValidation(c echo.Context) error {
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// Send request to Python with retry logic for Choreo cold-start
+	// Send request to Python with retry logic for cold-start
+	// IMPORTANT: Gateway has a hard 60s timeout. We use 45s per attempt to stay safely under it.
 	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
-	client := &http.Client{Timeout: 120 * time.Second}
+	client := &http.Client{Timeout: 45 * time.Second}
 
 	var resp *http.Response
-	maxRetries := 3
+	// Only 2 retries with minimal delay - each attempt is 45s max → total ~92s
+	// The first attempt usually succeeds if HF Space is warm (seen in logs: ~1s response)
+	maxRetries := 2
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if attempt > 1 {
 			fmt.Printf("--- Retry attempt %d/%d (Python API cold-start) ---\n", attempt, maxRetries)
-			time.Sleep(3 * time.Second)
+			time.Sleep(1 * time.Second) // Minimal delay
 
+			// Rebuild the multipart body for retry
 			retryBody := &bytes.Buffer{}
 			retryWriter := multipart.NewWriter(retryBody)
 			retryPart, _ := retryWriter.CreateFormFile("file", file.Filename)
@@ -199,10 +207,11 @@ func handleValidation(c echo.Context) error {
 			resp.Body.Close()
 		}
 	}
-
+	
 	if err != nil {
 		fmt.Printf("Python API connection failed after %d attempts: %v\n", maxRetries, err)
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI service error after %d retries: %v", maxRetries, err))
+		// Return 503 with a helpful message so the Flutter app can show a retry prompt
+		return echo.NewHTTPError(http.StatusServiceUnavailable, "AI service is warming up. Please wait 30 seconds and try again.")
 	}
 	defer resp.Body.Close()
 
@@ -211,12 +220,13 @@ func handleValidation(c echo.Context) error {
 	bodyBytes, _ := io.ReadAll(resp.Body)
 	if err := json.Unmarshal(bodyBytes, &pythonResponse); err != nil {
 		fmt.Printf("Failed to parse AI response. Status: %d, Raw Body: %s\n", resp.StatusCode, string(bodyBytes))
+		// If it's a 503, return it as a 503 to the app
 		if resp.StatusCode == http.StatusServiceUnavailable {
 			return echo.NewHTTPError(http.StatusServiceUnavailable, "AI models are still loading, please wait 30 seconds")
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI response error (status %d): check logs for body", resp.StatusCode))
 	}
-
+	
 	pythonResponse["go_results"] = goResults
 	pythonResponse["orchestrator"] = "Go Gateway -> Python AI"
 
@@ -228,12 +238,12 @@ func handleValidation(c echo.Context) error {
 		if strings.HasPrefix(mimeType, "video") || strings.HasSuffix(file.Filename, ".mp4") {
 			mediaType = "video"
 		}
-
+		
 		pred, ok1 := pythonResponse["prediction"].(string)
 		conf, ok2 := pythonResponse["confidence"].(float64)
 
 		if ok1 && ok2 {
-			handlers.DBPool.Exec(context.Background(),
+			handlers.DBPool.Exec(context.Background(), 
 				"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
 				userID, mediaType, file.Filename, pred, conf)
 		}
@@ -241,3 +251,4 @@ func handleValidation(c echo.Context) error {
 
 	return c.JSON(resp.StatusCode, pythonResponse)
 }
+
