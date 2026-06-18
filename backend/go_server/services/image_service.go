@@ -32,8 +32,12 @@ func downsampleImage(src image.Image, maxDim int) image.Image {
 		newH = maxDim
 		newW = (w * maxDim) / h
 	}
-	if newW < 1 { newW = 1 }
-	if newH < 1 { newH = 1 }
+	if newW < 1 {
+		newW = 1
+	}
+	if newH < 1 {
+		newH = 1
+	}
 	dst := image.NewRGBA(image.Rect(0, 0, newW, newH))
 	// Nearest-neighbour scale — fast and sufficient for analysis
 	for y := 0; y < newH; y++ {
@@ -85,8 +89,7 @@ func ValidateEXIF(fileData []byte) ValidationResult {
 				return ValidationResult{"EXIF_ANALYSIS", "EDITED", fmt.Sprintf("Suspicious editing software found: %s", swStr)}
 			}
 		}
-		// If it has software but not inherently suspicious, still might be an edit depending on strictness
-		return ValidationResult{"EXIF_ANALYSIS", "EDITED", fmt.Sprintf("Image altered by software: %s", swStr)}
+		return ValidationResult{"EXIF_ANALYSIS", "SUSPICIOUS", fmt.Sprintf("Software metadata present: %s", swStr)}
 	}
 
 	// 1b. Check if camera hardware tags exist
@@ -104,7 +107,7 @@ func ValidateEXIF(fileData []byte) ValidationResult {
 func GenerateHash(fileData []byte) ValidationResult {
 	hash := sha256.Sum256(fileData)
 	hashString := hex.EncodeToString(hash[:])
-	
+
 	return ValidationResult{
 		Method:  "HASH_GENERATION",
 		Status:  "REAL", // Hash is just informational
@@ -276,7 +279,7 @@ func ValidateFileStructure(fileData []byte) ValidationResult {
 	// Known magic numbers
 	jpegMagic := []byte{0xFF, 0xD8, 0xFF}
 	pngMagic := []byte{0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A}
-	
+
 	isValid := false
 	detectedFmt := "Unknown"
 
@@ -302,13 +305,13 @@ func ValidateFileStructure(fileData []byte) ValidationResult {
 // Global Image Validation Runner
 func RunImageValidation(fileData []byte, mimeType string) []ValidationResult {
 	var results []ValidationResult
-	
+
 	results = append(results, GenerateHash(fileData))
 	results = append(results, ValidateFileStructure(fileData))
 	results = append(results, ValidateMetadata(fileData, mimeType))
 	results = append(results, ValidateEXIF(fileData))
 	results = append(results, ValidateNoise(fileData))
 	results = append(results, ValidateELA(fileData))
-	
+
 	return results
 }

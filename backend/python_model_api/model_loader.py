@@ -57,6 +57,8 @@ def preprocess_image(image_bytes):
     # Convert bytes to numpy array
     nparr = np.frombuffer(image_bytes, np.uint8)
     img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if img_bgr is None:
+        raise ValueError("Could not decode image bytes")
     
     # Needs to be RGB
     img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)

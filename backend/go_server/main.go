@@ -32,6 +32,16 @@ func getEnv(key, fallback string) string {
 	return fallback
 }
 
+func isVideoUpload(filename, mimeType string) bool {
+	lowerName := strings.ToLower(filename)
+	lowerMime := strings.ToLower(mimeType)
+	return strings.HasPrefix(lowerMime, "video/") ||
+		strings.HasSuffix(lowerName, ".mp4") ||
+		strings.HasSuffix(lowerName, ".mov") ||
+		strings.HasSuffix(lowerName, ".avi") ||
+		strings.HasSuffix(lowerName, ".mkv")
+}
+
 func main() {
 	// Load .env file
 	if err := godotenv.Load("../../.env"); err != nil {
@@ -83,14 +93,20 @@ func main() {
 	go func() {
 		// Derive the base URL from PythonApiUrl (strip /predict)
 		baseURL := strings.TrimSuffix(PythonApiUrl, "/predict")
-		pingURL := baseURL + "/"
+		pingURL := baseURL + "/ready"
 		pingClient := &http.Client{Timeout: 10 * time.Second}
 
 		fmt.Printf("Triggering Early-Ping warmup to: %s\n", baseURL)
 		// Immediate first ping on startup to wake up HF Space early
 		if resp, err := pingClient.Get(pingURL); err == nil {
 			resp.Body.Close()
-			fmt.Printf("[Keepalive] Initial warmup ping OK\n")
+			if resp.StatusCode == http.StatusOK {
+				fmt.Printf("[Keepalive] Initial readiness check OK\n")
+			} else {
+				fmt.Printf("[Keepalive] Initial readiness check returned %d\n", resp.StatusCode)
+			}
+		} else {
+			fmt.Printf("[Keepalive] Initial readiness check failed: %v\n", err)
 		}
 
 		ticker := time.NewTicker(4 * time.Minute)
@@ -98,10 +114,14 @@ func main() {
 		for range ticker.C {
 			resp, err := pingClient.Get(pingURL)
 			if err != nil {
-				fmt.Printf("[Keepalive] Ping failed: %v\n", err)
+				fmt.Printf("[Keepalive] Readiness ping failed: %v\n", err)
 			} else {
 				resp.Body.Close()
-				fmt.Printf("[Keepalive] HF Space pinged successfully\n")
+				if resp.StatusCode == http.StatusOK {
+					fmt.Printf("[Keepalive] HF Space is ready\n")
+				} else {
+					fmt.Printf("[Keepalive] HF Space not ready yet (status %d)\n", resp.StatusCode)
+				}
 			}
 		}
 	}()
@@ -140,7 +160,7 @@ func handleValidation(c echo.Context) error {
 	var goResults []services.ValidationResult
 	isEdited := false
 
-	if strings.HasPrefix(mimeType, "video") || strings.HasSuffix(file.Filename, ".mp4") {
+	if isVideoUpload(file.Filename, mimeType) {
 		goResults = services.RunVideoValidation(fileBytes, mimeType)
 	} else {
 		goResults = services.RunImageValidation(fileBytes, mimeType)
@@ -170,10 +190,10 @@ func handleValidation(c echo.Context) error {
 		if userIDStr != "" {
 			userID, _ := strconv.ParseInt(userIDStr, 10, 64)
 			mediaType := "photo"
-			if strings.HasPrefix(mimeType, "video") || strings.HasSuffix(file.Filename, ".mp4") {
+			if isVideoUpload(file.Filename, mimeType) {
 				mediaType = "video"
 			}
-			handlers.DBPool.Exec(context.Background(), 
+			handlers.DBPool.Exec(context.Background(),
 				"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
 				userID, mediaType, file.Filename, "edited", 99.0)
 		}
@@ -188,7 +208,7 @@ func handleValidation(c echo.Context) error {
 	if err != nil {
 		return err
 	}
-	
+
 	if _, err = part.Write(fileBytes); err != nil {
 		return err
 	}
@@ -200,15 +220,12 @@ func handleValidation(c echo.Context) error {
 	}
 	req.Header.Set("Content-Type", writer.FormDataContentType())
 
-	// Send request to Python with retry logic for cold-start
-	// IMPORTANT: Gateway has a hard 60s timeout. We use 45s per attempt to stay safely under it.
+	// Send request to Python. Choreo has a hard ~60s gateway timeout, so keep this below it.
 	fmt.Printf("--- Sending validation request to Python API: %s ---\n", PythonApiUrl)
-	client := &http.Client{Timeout: 45 * time.Second}
+	client := &http.Client{Timeout: 50 * time.Second}
 
 	var resp *http.Response
-	// Only 2 retries with minimal delay - each attempt is 45s max → total ~92s
-	// The first attempt usually succeeds if HF Space is warm (seen in logs: ~1s response)
-	maxRetries := 2
+	maxRetries := 1
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		if attempt > 1 {
 			fmt.Printf("--- Retry attempt %d/%d (Python API cold-start) ---\n", attempt, maxRetries)
@@ -236,7 +253,7 @@ func handleValidation(c echo.Context) error {
 			resp.Body.Close()
 		}
 	}
-	
+
 	if err != nil {
 		fmt.Printf("Python API connection failed after %d attempts: %v\n", maxRetries, err)
 		// Return 503 with a helpful message so the Flutter app can show a retry prompt
@@ -255,7 +272,7 @@ func handleValidation(c echo.Context) error {
 		}
 		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI response error (status %d): check logs for body", resp.StatusCode))
 	}
-	
+
 	pythonResponse["go_results"] = goResults
 	pythonResponse["orchestrator"] = "Go Gateway -> Python AI"
 
@@ -264,15 +281,15 @@ func handleValidation(c echo.Context) error {
 	if userIDStr != "" {
 		userID, _ := strconv.ParseInt(userIDStr, 10, 64)
 		mediaType := "photo"
-		if strings.HasPrefix(mimeType, "video") || strings.HasSuffix(file.Filename, ".mp4") {
+		if isVideoUpload(file.Filename, mimeType) {
 			mediaType = "video"
 		}
-		
+
 		pred, ok1 := pythonResponse["prediction"].(string)
 		conf, ok2 := pythonResponse["confidence"].(float64)
 
 		if ok1 && ok2 {
-			handlers.DBPool.Exec(context.Background(), 
+			handlers.DBPool.Exec(context.Background(),
 				"INSERT INTO user_usage (user_id, media_type, filename, result, confidence) VALUES ($1, $2, $3, $4, $5)",
 				userID, mediaType, file.Filename, pred, conf)
 		}
@@ -280,4 +297,3 @@ func handleValidation(c echo.Context) error {
 
 	return c.JSON(resp.StatusCode, pythonResponse)
 }
-
