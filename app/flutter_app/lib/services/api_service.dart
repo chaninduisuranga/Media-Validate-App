@@ -9,31 +9,23 @@ class ApiService {
   static const String baseUrl =
       'https://ad651a9f-1e89-4a7c-ad18-449298cef4a1-dev.e1-us-east-azure.choreoapis.dev/media-auth-app/media-go-backend/v1.0/api';
 
-  // Max upload size for images: 1MB. Above this we compress before sending.
-  // Camera photos (3-10MB) will be shrunk to ~400-800KB, same visual quality.
-  static const int _maxImageBytes = 1 * 1024 * 1024; // 1 MB
-  static const int _maxImageDim = 1920; // max width or height in pixels
+  // Keep uploads small enough for Choreo/HF cold-start windows.
+  // Original camera photos can timeout even when the model itself is fast.
+  static const int _maxImageDim = 1280; // max width or height in pixels
 
-  /// Compress an image file if it's over [_maxImageBytes].
-  /// Returns compressed bytes, or null if the file is a video or already small.
+  /// Normalize image uploads to a bounded JPEG payload.
+  /// Returns compressed bytes, or null if the file is a video/unsupported type.
   static Future<Uint8List?> _maybeCompressImage(File file) async {
     final ext = p.extension(file.path).toLowerCase();
     final isImage = ['.jpg', '.jpeg', '.png', '.webp'].contains(ext);
     if (!isImage) return null; // videos: skip
 
-    final fileSize = await file.length();
-    if (fileSize <= _maxImageBytes) return null; // already small: skip
-
-    final format = ext == '.png'
-        ? CompressFormat.png
-        : CompressFormat.jpeg;
-
     final compressed = await FlutterImageCompress.compressWithFile(
       file.absolute.path,
       minWidth: _maxImageDim,
       minHeight: _maxImageDim,
-      quality: 85,
-      format: format,
+      quality: 82,
+      format: CompressFormat.jpeg,
     );
 
     return compressed;
@@ -80,15 +72,19 @@ class ApiService {
         );
 
         if (compressedBytes != null) {
-          // Use compressed bytes (image was large, now ≤1MB)
-          request.files.add(http.MultipartFile.fromBytes(
-            'file',
-            compressedBytes,
-            filename: p.basename(file.path),
-          ));
+          // Use normalized JPEG bytes so original camera photos avoid gateway timeouts.
+          request.files.add(
+            http.MultipartFile.fromBytes(
+              'file',
+              compressedBytes,
+              filename: '${p.basenameWithoutExtension(file.path)}.jpg',
+            ),
+          );
         } else {
           // Use original file (video or already-small image)
-          request.files.add(await http.MultipartFile.fromPath('file', file.path));
+          request.files.add(
+            await http.MultipartFile.fromPath('file', file.path),
+          );
         }
         request.fields['user_id'] = userId.toString();
 

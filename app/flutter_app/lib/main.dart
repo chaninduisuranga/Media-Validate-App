@@ -175,7 +175,12 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isVideo) {
       pickedFile = await _picker.pickVideo(source: source);
     } else {
-      pickedFile = await _picker.pickImage(source: source);
+      pickedFile = await _picker.pickImage(
+        source: source,
+        maxWidth: 1280,
+        maxHeight: 1280,
+        imageQuality: 82,
+      );
     }
 
     if (pickedFile != null) {
@@ -378,8 +383,8 @@ class _HomeScreenState extends State<HomeScreen> {
               : Stack(
                   fit: StackFit.expand,
                   children: [
-                    _selectedFile!.path.endsWith('.mp4') ||
-                            _selectedFile!.path.endsWith('.mov')
+                    _selectedFile!.path.toLowerCase().endsWith('.mp4') ||
+                            _selectedFile!.path.toLowerCase().endsWith('.mov')
                         ? Container(
                             color: AppColors.bgElevated,
                             child: Column(
