@@ -59,6 +59,19 @@ def startup_event():
 def read_root():
     return {"message": "MesoNet Inference API is running", "models_loaded": models_loaded}
 
+@app.get("/ready")
+def readiness_check():
+    if not models_loaded or face_model is None or scene_model is None:
+        raise HTTPException(status_code=503, detail="Models are still loading")
+    return {"status": "ready", "models_loaded": True}
+
+@app.get("/predict")
+def predict_info():
+    return {
+        "message": "Use POST /predict with a multipart file field named 'file'",
+        "models_loaded": models_loaded,
+    }
+
 @app.post("/predict")
 def predict(file: UploadFile = File(...)):
     global face_model, scene_model
