@@ -57,10 +57,24 @@ def calculate_ela_score(image_bytes, quality=90):
         if original is None:
             return 0.0
 
+        h, w = original.shape[:2]
+        max_dim = 1280
+        if max(h, w) > max_dim:
+            scale = max_dim / float(max(h, w))
+            original = cv2.resize(
+                original,
+                (int(w * scale), int(h * scale)),
+                interpolation=cv2.INTER_AREA,
+            )
+
         # Resave as JPEG in memory at specific quality
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), quality]
-        _, encimg = cv2.imencode('.jpg', original, encode_param)
+        ok, encimg = cv2.imencode('.jpg', original, encode_param)
+        if not ok:
+            return 0.0
         resaved = cv2.imdecode(encimg, cv2.IMREAD_COLOR)
+        if resaved is None:
+            return 0.0
 
         # Calculate absolute difference
         diff = cv2.absdiff(original, resaved)
