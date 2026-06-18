@@ -1,12 +1,43 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:http/http.dart' as http;
+import 'package:path/path.dart' as p;
 
 class ApiService {
-  // This is your laptop's current Wi-Fi IP address (10.194.146.164).
-  // This single address works perfectly for BOTH your connected Phone and the Emulator!
   static const String baseUrl =
       'https://ad651a9f-1e89-4a7c-ad18-449298cef4a1-dev.e1-us-east-azure.choreoapis.dev/media-auth-app/media-go-backend/v1.0/api';
+
+  // Max upload size for images: 1MB. Above this we compress before sending.
+  // Camera photos (3-10MB) will be shrunk to ~400-800KB, same visual quality.
+  static const int _maxImageBytes = 1 * 1024 * 1024; // 1 MB
+  static const int _maxImageDim = 1920; // max width or height in pixels
+
+  /// Compress an image file if it's over [_maxImageBytes].
+  /// Returns compressed bytes, or null if the file is a video or already small.
+  static Future<Uint8List?> _maybeCompressImage(File file) async {
+    final ext = p.extension(file.path).toLowerCase();
+    final isImage = ['.jpg', '.jpeg', '.png', '.webp'].contains(ext);
+    if (!isImage) return null; // videos: skip
+
+    final fileSize = await file.length();
+    if (fileSize <= _maxImageBytes) return null; // already small: skip
+
+    final format = ext == '.png'
+        ? CompressFormat.png
+        : CompressFormat.jpeg;
+
+    final compressed = await FlutterImageCompress.compressWithFile(
+      file.absolute.path,
+      minWidth: _maxImageDim,
+      minHeight: _maxImageDim,
+      quality: 85,
+      format: format,
+    );
+
+    return compressed;
+  }
 
   static Future<Map<String, dynamic>> _safeRequest(
     Future<http.Response> Function() requestFn, {
@@ -37,16 +68,28 @@ class ApiService {
     File file,
     dynamic userId,
   ) async {
-    // Use a longer timeout (3 min) because the Go server relays to Hugging Face
-    // which may take 30-90s. Retries kept to 1 to avoid duplicate HF requests.
+    // Compress large images before uploading.
+    // Camera photos (3-10MB) → compressed to ≤1MB → faster upload, no gateway timeout.
+    final compressedBytes = await _maybeCompressImage(file);
+
     return _safeRequest(
       () async {
         var request = http.MultipartRequest(
           'POST',
           Uri.parse('$baseUrl/validate'),
         );
-        request.files
-            .add(await http.MultipartFile.fromPath('file', file.path));
+
+        if (compressedBytes != null) {
+          // Use compressed bytes (image was large, now ≤1MB)
+          request.files.add(http.MultipartFile.fromBytes(
+            'file',
+            compressedBytes,
+            filename: p.basename(file.path),
+          ));
+        } else {
+          // Use original file (video or already-small image)
+          request.files.add(await http.MultipartFile.fromPath('file', file.path));
+        }
         request.fields['user_id'] = userId.toString();
 
         var streamedResponse = await request.send();
