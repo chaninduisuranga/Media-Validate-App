@@ -77,6 +77,35 @@ func main() {
 	e.GET("/api/user/:id/analytics", handlers.GetAnalyticsHandler)
 	e.GET("/api/user/:id/history", handlers.GetHistoryHandler)
 
+	// --- HF Space Keepalive ---
+	// HuggingFace free tier sleeps after ~5min inactivity → causes 60s+ cold start → gateway 504
+	// This goroutine pings the HF Space root every 4 minutes to keep it always warm.
+	go func() {
+		// Derive the base URL from PythonApiUrl (strip /predict)
+		baseURL := strings.TrimSuffix(PythonApiUrl, "/predict")
+		pingURL := baseURL + "/"
+		pingClient := &http.Client{Timeout: 10 * time.Second}
+
+		fmt.Printf("Triggering Early-Ping warmup to: %s\n", baseURL)
+		// Immediate first ping on startup to wake up HF Space early
+		if resp, err := pingClient.Get(pingURL); err == nil {
+			resp.Body.Close()
+			fmt.Printf("[Keepalive] Initial warmup ping OK\n")
+		}
+
+		ticker := time.NewTicker(4 * time.Minute)
+		defer ticker.Stop()
+		for range ticker.C {
+			resp, err := pingClient.Get(pingURL)
+			if err != nil {
+				fmt.Printf("[Keepalive] Ping failed: %v\n", err)
+			} else {
+				resp.Body.Close()
+				fmt.Printf("[Keepalive] HF Space pinged successfully\n")
+			}
+		}
+	}()
+
 	// Start server
 	port := os.Getenv("PORT")
 	if port == "" {
