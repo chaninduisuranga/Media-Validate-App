@@ -20,6 +20,9 @@ class ApiService {
     final isImage = ['.jpg', '.jpeg', '.png', '.webp'].contains(ext);
     if (!isImage) return null; // videos: skip
 
+    final originalSize = await file.length();
+    print('[ApiService] Compressing image: ${(originalSize / 1024).toStringAsFixed(0)}KB -> target max ${_maxImageDim}px @ quality 82');
+
     final compressed = await FlutterImageCompress.compressWithFile(
       file.absolute.path,
       minWidth: _maxImageDim,
@@ -27,6 +30,12 @@ class ApiService {
       quality: 82,
       format: CompressFormat.jpeg,
     );
+
+    if (compressed != null) {
+      print('[ApiService] Compression done: ${(originalSize / 1024).toStringAsFixed(0)}KB -> ${(compressed.length / 1024).toStringAsFixed(0)}KB (${((1 - compressed.length / originalSize) * 100).toStringAsFixed(0)}% reduction)');
+    } else {
+      print('[ApiService] WARNING: Compression returned null - sending original file');
+    }
 
     return compressed;
   }

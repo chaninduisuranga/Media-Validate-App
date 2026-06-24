@@ -264,13 +264,23 @@ func handleValidation(c echo.Context) error {
 	// Parse python response and attach our structural Go findings
 	var pythonResponse map[string]interface{}
 	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	// Forward non-2xx errors from Python directly to the client
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Python API returned non-200 status: %d | Body: %s\n", resp.StatusCode, string(bodyBytes))
+		// Try to parse Python's error detail for a user-friendly message
+		var errBody map[string]interface{}
+		if jsonErr := json.Unmarshal(bodyBytes, &errBody); jsonErr == nil {
+			if detail, ok := errBody["detail"].(string); ok {
+				return echo.NewHTTPError(resp.StatusCode, detail)
+			}
+		}
+		return echo.NewHTTPError(resp.StatusCode, fmt.Sprintf("AI service error (status %d)", resp.StatusCode))
+	}
+
 	if err := json.Unmarshal(bodyBytes, &pythonResponse); err != nil {
 		fmt.Printf("Failed to parse AI response. Status: %d, Raw Body: %s\n", resp.StatusCode, string(bodyBytes))
-		// If it's a 503, return it as a 503 to the app
-		if resp.StatusCode == http.StatusServiceUnavailable {
-			return echo.NewHTTPError(http.StatusServiceUnavailable, "AI models are still loading, please wait 30 seconds")
-		}
-		return echo.NewHTTPError(http.StatusInternalServerError, fmt.Sprintf("AI response error (status %d): check logs for body", resp.StatusCode))
+		return echo.NewHTTPError(http.StatusInternalServerError, "AI response parse error: check logs")
 	}
 
 	pythonResponse["go_results"] = goResults
