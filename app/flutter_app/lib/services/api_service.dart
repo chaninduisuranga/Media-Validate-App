@@ -9,10 +9,10 @@ class ApiService {
   static const String baseUrl =
       'https://ad651a9f-1e89-4a7c-ad18-449298cef4a1-dev.e1-us-east-azure.choreoapis.dev/media-auth-app/media-go-backend/v1.0/api';
 
-  // Max upload size for images: 1MB. Above this we compress before sending.
-  // Camera photos (3-10MB) will be shrunk to ~400-800KB, same visual quality.
-  static const int _maxImageBytes = 1 * 1024 * 1024; // 1 MB
-  static const int _maxImageDim = 1920; // max width or height in pixels
+  // Max upload size for images: 800KB. Above this we compress before sending.
+  // Camera photos (3-10MB) will be shrunk to ~400-700KB, same visual quality.
+  static const int _maxImageBytes = 800 * 1024; // 800 KB
+  static const int _maxImageDim = 1024; // MAX width or height in pixels after resize
 
   /// Compress an image file if it's over [_maxImageBytes].
   /// Returns compressed bytes, or null if the file is a video or already small.
@@ -24,17 +24,22 @@ class ApiService {
     final fileSize = await file.length();
     if (fileSize <= _maxImageBytes) return null; // already small: skip
 
-    final format = ext == '.png'
-        ? CompressFormat.png
-        : CompressFormat.jpeg;
-
+    // Always compress to JPEG for max compatibility and smallest size
+    // minWidth/minHeight in this package means the output will be AT MOST this size
+    // (it scales down proportionally if the image is larger)
     final compressed = await FlutterImageCompress.compressWithFile(
       file.absolute.path,
-      minWidth: _maxImageDim,
-      minHeight: _maxImageDim,
-      quality: 85,
-      format: format,
+      minWidth: _maxImageDim,   // package treats this as the target max dimension
+      minHeight: _maxImageDim,  // image is scaled so longest side = _maxImageDim
+      quality: 80,              // 80% quality gives ~5x size reduction with no visible loss
+      format: CompressFormat.jpeg,
     );
+
+    if (compressed != null) {
+      print('[ApiService] Compressed ${(fileSize / 1024).toStringAsFixed(0)}KB -> ${(compressed.length / 1024).toStringAsFixed(0)}KB');
+    } else {
+      print('[ApiService] Compression returned null for ${file.path}');
+    }
 
     return compressed;
   }

@@ -8,6 +8,7 @@ import os
 import threading
 import gc
 import psutil
+import traceback
 
 # FORCE CPU MODE - Save RAM and initialization time
 os.environ["CUDA_VISIBLE_DEVICES"] = "-1"
@@ -80,7 +81,14 @@ def predict(file: UploadFile = File(...)):
 
     contents = file.file.read()
     filename = file.filename.lower()
-    print(f"--- Received file for prediction: {filename} ({len(contents)} bytes) ---")
+    size_kb = len(contents) / 1024
+    print(f"--- Received file: {filename} | Size: {size_kb:.1f} KB ({len(contents)} bytes) ---")
+
+    # Reject files over 10MB — something went wrong upstream if this happens
+    MAX_BYTES = 10 * 1024 * 1024  # 10MB
+    if len(contents) > MAX_BYTES:
+        print(f"--- REJECTED: File too large ({size_kb:.1f} KB > 10240 KB) ---")
+        raise HTTPException(status_code=413, detail=f"File too large ({size_kb:.0f}KB). Max allowed is 10MB. Please compress before uploading.")
 
 
     # Determine if it's an image or video
@@ -126,7 +134,8 @@ def predict(file: UploadFile = File(...)):
             print(f"--- Inference Complete. Raw prediction: {prediction} ---")
                 
         except Exception as e:
-            print(f"DEBUG Error in image: {e}")
+            tb = traceback.format_exc()
+            print(f"ERROR in image processing:\n{tb}")
             raise HTTPException(status_code=400, detail=f"Error processing image: {str(e)}")
     
     elif filename.endswith(('.mp4', '.avi', '.mov', '.mkv')):
