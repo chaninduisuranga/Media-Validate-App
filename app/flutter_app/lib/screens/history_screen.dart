@@ -16,6 +16,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
   List<dynamic> _history = [];
   bool _isLoading = true;
   String _filter = 'All';
+  String? _error;
 
   @override
   void initState() {
@@ -25,6 +26,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
 
   Future<void> _loadHistory() async {
     if (widget.userData == null) return;
+    setState(() { _isLoading = true; _error = null; });
     try {
       final response = await ApiService.getHistory(widget.userData!['id']);
       if (mounted) {
@@ -34,7 +36,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
         });
       }
     } catch (e) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) setState(() { _isLoading = false; _error = e.toString(); });
     }
   }
 
@@ -71,23 +73,40 @@ class _HistoryScreenState extends State<HistoryScreen> {
           _buildFilterBar(),
           Expanded(
             child: _isLoading
-                ? const Center(
-                    child: CircularProgressIndicator(color: AppColors.primary),
-                  )
-                : _history.isEmpty
-                ? _buildEmptyState()
-                : RefreshIndicator(
-                    onRefresh: _loadHistory,
-                    color: AppColors.primary,
-                    backgroundColor: AppColors.bgSurface,
-                    child: ListView.builder(
-                      padding: const EdgeInsets.all(20),
-                      itemCount: _filteredHistory.length,
-                      itemBuilder: (context, index) {
-                        return _buildHistoryCard(_filteredHistory[index]);
-                      },
-                    ),
+              ? const Center(
+                  child: CircularProgressIndicator(color: AppColors.primary),
+                )
+              : _error != null
+              ? Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Icon(Icons.cloud_off_rounded, color: AppColors.textMuted, size: 48),
+                      const SizedBox(height: 16),
+                      Text('Could not load history', style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 16)),
+                      const SizedBox(height: 8),
+                      TextButton.icon(
+                        onPressed: _loadHistory,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('Retry'),
+                      ),
+                    ],
                   ),
+                )
+              : _history.isEmpty
+              ? _buildEmptyState()
+              : RefreshIndicator(
+                  onRefresh: _loadHistory,
+                  color: AppColors.primary,
+                  backgroundColor: AppColors.bgSurface,
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: _filteredHistory.length,
+                    itemBuilder: (context, index) {
+                      return _buildHistoryCard(_filteredHistory[index]);
+                    },
+                  ),
+                ),
           ),
         ],
       ),
@@ -240,7 +259,7 @@ class _HistoryScreenState extends State<HistoryScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  '${item['confidence']}% Match',
+                  _formatConfidence(item['confidence']),
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -253,6 +272,14 @@ class _HistoryScreenState extends State<HistoryScreen> {
         ),
       ),
     );
+  }
+
+  String _formatConfidence(dynamic raw) {
+    if (raw == null) return '—';
+    final val = (raw as num).toDouble();
+    // Show 1 decimal place, trim trailing zero: 99.5 not 99.50000
+    final formatted = val.toStringAsFixed(1);
+    return '$formatted% Match';
   }
 
   String _formatDate(DateTime date) {

@@ -63,6 +63,27 @@ class _MainShellState extends State<MainShell> {
     ];
   }
 
+  void _onTabTap(int index) {
+    // Refresh data pages when switching back to them
+    if (index != _currentIndex) {
+      setState(() {
+        _currentIndex = index;
+        // Re-create Analytics and History pages to force fresh data fetch
+        if (index == 1) {
+          _pages[1] = AnalyticsScreen(
+            key: UniqueKey(),
+            userData: widget.userData!,
+          );
+        } else if (index == 2) {
+          _pages[2] = HistoryScreen(
+            key: UniqueKey(),
+            userData: widget.userData,
+          );
+        }
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -97,7 +118,7 @@ class _MainShellState extends State<MainShell> {
               final isActive = i == _currentIndex;
               return Expanded(
                 child: InkWell(
-                  onTap: () => setState(() => _currentIndex = i),
+                  onTap: () => _onTabTap(i),
                   splashColor: Colors.transparent,
                   highlightColor: Colors.transparent,
                   child: Column(
@@ -175,12 +196,8 @@ class _HomeScreenState extends State<HomeScreen> {
     if (isVideo) {
       pickedFile = await _picker.pickVideo(source: source);
     } else {
-      pickedFile = await _picker.pickImage(
-        source: source,
-        maxWidth: 1280,
-        maxHeight: 1280,
-        imageQuality: 82,
-      );
+      // Pick raw image — api_service._maybeCompressImage handles compression
+      pickedFile = await _picker.pickImage(source: source);
     }
 
     if (pickedFile != null) {

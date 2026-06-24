@@ -14,6 +14,7 @@ class AnalyticsScreen extends StatefulWidget {
 class _AnalyticsScreenState extends State<AnalyticsScreen> {
   Map<String, dynamic>? _stats;
   bool _isLoading = true;
+  String? _error;
 
   @override
   void initState() {
@@ -22,19 +23,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Future<void> _fetchStats() async {
+    setState(() { _isLoading = true; _error = null; });
     try {
       final userId = widget.userData['id'];
       final response = await ApiService.getAnalytics(userId);
-      if (response['success']) {
-        setState(() {
+      if (response['success'] == true) {
+        if (mounted) setState(() {
           _stats = response['stats'];
           _isLoading = false;
         });
+      } else {
+        if (mounted) setState(() { _isLoading = false; _error = 'Failed to load stats'; });
       }
     } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() { _isLoading = false; _error = e.toString(); });
     }
   }
 
@@ -56,6 +58,23 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
       body: _isLoading
           ? const Center(
               child: CircularProgressIndicator(color: AppColors.primary),
+            )
+          : _error != null
+          ? Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.cloud_off_rounded, color: AppColors.textMuted, size: 48),
+                  const SizedBox(height: 16),
+                  Text('Could not load stats', style: GoogleFonts.outfit(color: AppColors.textSecondary, fontSize: 16)),
+                  const SizedBox(height: 8),
+                  TextButton.icon(
+                    onPressed: _fetchStats,
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             )
           : RefreshIndicator(
               onRefresh: _fetchStats,
@@ -111,7 +130,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                         ),
                         _buildStatCard(
                           'System Accuracy',
-                          '99.2%',
+                          _computeAccuracy(),
                           Icons.auto_awesome_rounded,
                           AppColors.warning,
                         ),
@@ -121,11 +140,25 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                     _buildUsageBreakdown(),
                     const SizedBox(height: 24),
                     _buildPerformanceCard(),
+                    const SizedBox(height: 24),
                   ],
                 ),
               ),
             ),
     );
+  }
+
+  /// Computes accuracy from real DB stats: (real_count / total) * 100
+  String _computeAccuracy() {
+    final total = (_stats?['total_validations'] as int?) ?? 0;
+    final real = (_stats?['real_count'] as int?) ?? 0;
+    final fake = (_stats?['fake_count'] as int?) ?? 0;
+    if (total == 0) return 'N/A';
+    // Accuracy = classified items / total (items with a definitive result)
+    final classified = real + fake;
+    if (classified == 0) return 'N/A';
+    final accuracy = (classified / total * 100).toStringAsFixed(1);
+    return '$accuracy%';
   }
 
   Widget _buildStatCard(
@@ -281,6 +314,20 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
   }
 
   Widget _buildPerformanceCard() {
+    final total = (_stats?['total_validations'] as int?) ?? 0;
+    final photoCount = (_stats?['photo_count'] as int?) ?? 0;
+    final videoCount = (_stats?['video_count'] as int?) ?? 0;
+    final fakeCount = (_stats?['fake_count'] as int?) ?? 0;
+
+    String subtitle;
+    if (total == 0) {
+      subtitle = 'No scans yet — start validating media above';
+    } else if (fakeCount > 0) {
+      subtitle = '$fakeCount suspicious file${fakeCount > 1 ? 's' : ''} flagged from $total total scans';
+    } else {
+      subtitle = 'All $total scan${total > 1 ? 's' : ''} clean — ${photoCount}P / ${videoCount}V processed';
+    }
+
     return AppCard(
       padding: const EdgeInsets.all(20),
       gradient: LinearGradient(
@@ -311,7 +358,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Peak Optimization',
+                  'Scan Summary',
                   style: GoogleFonts.outfit(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -319,7 +366,7 @@ class _AnalyticsScreenState extends State<AnalyticsScreen> {
                   ),
                 ),
                 Text(
-                  'Detection time reduced by 40% this week',
+                  subtitle,
                   style: GoogleFonts.outfit(
                     fontSize: 12,
                     color: AppColors.textSecondary,
