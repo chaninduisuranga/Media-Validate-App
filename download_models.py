@@ -6,7 +6,7 @@ import os
 from huggingface_hub import hf_hub_download
 
 REPO_ID = "Chanindu01/media-validate-api"
-MODELS_DIR = "/app/models"
+MODELS_DIR = os.environ.get("MODELS_DIR", "/app/models")
 
 MODELS = [
     "efficientnet_b4_face_model.keras",
