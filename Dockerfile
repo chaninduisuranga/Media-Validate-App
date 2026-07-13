@@ -19,17 +19,18 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-
-    
 # Install python dependencies
 COPY --chown=user:user backend/python_model_api/requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir -r requirements.txt huggingface_hub
 
-# Copy model files (MesoNet, CIFAKE) to the container
-COPY --chown=user:user ./models /app/models
+# Create models directory
+RUN mkdir -p /app/models && chown user:user /app/models
 
 # Copy python API application code
 COPY --chown=user:user ./backend/python_model_api /app/backend/python_model_api
+
+# Copy model download startup script
+COPY --chown=user:user download_models.py /app/download_models.py
 
 # Expose the default Hugging Face port
 EXPOSE 7860
@@ -40,5 +41,5 @@ USER user
 # Set working directory to the API directory
 WORKDIR /app/backend/python_model_api
 
-# Run the FastAPI server
-CMD ["python", "main.py"]
+# Run: download models first, then start the FastAPI server
+CMD ["sh", "-c", "python /app/download_models.py && python main.py"]
