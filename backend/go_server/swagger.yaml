@@ -1,0 +1,161 @@
+openapi: 3.0.0
+info:
+  title: Media Validater API
+  description: API for authenticating users and validating media (images/videos) for deepfake detection.
+  version: 1.0.0
+servers:
+  - url: /
+    description: Base URL for Choreo deployment
+
+paths:
+  /api/signup:
+    post:
+      summary: Register a new user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        '201':
+          description: User registered successfully
+        '400':
+          description: Invalid request
+
+  /api/login:
+    post:
+      summary: Authenticate a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /api/validate:
+    post:
+      summary: Validate media relative to authenticity presets
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                user_id:
+                  type: string
+                  description: Optional user ID for logging
+      responses:
+        '200':
+          description: Validation result returned
+
+  /api/user/{id}:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+    put:
+      summary: Update user profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/User'
+      responses:
+        '200':
+          description: User profile updated successfully
+    delete:
+      summary: Delete user account
+      responses:
+        '204':
+          description: User account deleted successfully
+
+  /api/user/{id}/analytics:
+    get:
+      summary: Get user-specific engine insights
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Analytics stats returned
+
+  /api/user/{id}/history:
+    get:
+      summary: Get user verification log history
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: History items returned
+
+  /api/rate:
+    post:
+      summary: Add user rating or feedback
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RatingRequest'
+      responses:
+        '201':
+          description: Rating added successfully
+
+components:
+  schemas:
+    User:
+      type: object
+      properties:
+        id: { type: integer }
+        email: { type: string }
+        phone_no: { type: string }
+        address: { type: string }
+        first_name: { type: string }
+        last_name: { type: string }
+        profile_photo: { type: string }
+        created_at: { type: string, format: date-time }
+        update_at: { type: string, format: date-time }
+
+    SignupRequest:
+      type: object
+      properties:
+        email: { type: string }
+        password: { type: string }
+        phone_no: { type: string }
+        address: { type: string }
+        first_name: { type: string }
+        last_name: { type: string }
+        profile_photo: { type: string }
+
+    LoginRequest:
+      type: object
+      properties:
+        email: { type: string }
+        password: { type: string }
+
+    RatingRequest:
+      type: object
+      properties:
+        user_id: { type: integer }
+        rating: { type: integer, minimum: 1, maximum: 5 }
+        comment: { type: string }

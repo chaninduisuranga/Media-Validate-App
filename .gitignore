@@ -1,0 +1,43 @@
+# Flutter
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+build/
+
+# Go
+backend/go_server/bin/
+backend/go_server/vendor/
+backend/go_server/__debug_bin.exe
+backend/go_server/auth_test.exe
+backend/go_server/db_test.exe
+backend/go_server/main.exe
+backend/go_server/profile_test.exe
+backend/go_server/schema_sync_test.exe
+*.exe
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+
+# Environment / IDE
+.env
+.idea/
+.vscode/
+*.log
+logs/
+
+# Data & Cache
+data/
+cache/
+training.log
+
+# Models - IGNORE ALL EXCEPT ACTIVE ONES
+models/*
+!models/efficientnet_b4_face_model.keras
+!models/artifact_efficientnetv2b0.keras
