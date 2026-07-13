@@ -15,10 +15,18 @@ MODELS = [
 
 os.makedirs(MODELS_DIR, exist_ok=True)
 
+def is_lfs_pointer(filepath):
+    if not os.path.exists(filepath):
+        return False
+    # LFS pointers are tiny text files, usually less than 200 bytes. Real keras models are > 10MB.
+    if os.path.getsize(filepath) < 10240:
+        return True
+    return False
+
 for model_filename in MODELS:
     dest_path = os.path.join(MODELS_DIR, model_filename)
-    if os.path.exists(dest_path):
-        print(f"[download_models] Already exists, skipping: {model_filename}")
+    if os.path.exists(dest_path) and not is_lfs_pointer(dest_path):
+        print(f"[download_models] Already exists and is not an LFS pointer, skipping: {model_filename}")
         continue
 
     print(f"[download_models] Downloading {model_filename} from {REPO_ID}...")
@@ -34,9 +42,9 @@ for model_filename in MODELS:
         expected = os.path.join(MODELS_DIR, "models", model_filename)
         if os.path.exists(expected) and not os.path.exists(dest_path):
             os.rename(expected, dest_path)
-        print(f"[download_models] ✅ Downloaded: {model_filename} -> {dest_path}")
+        print(f"[download_models] [SUCCESS] Downloaded: {model_filename} -> {dest_path}")
     except Exception as e:
-        print(f"[download_models] ❌ Failed to download {model_filename}: {e}")
+        print(f"[download_models] [ERROR] Failed to download {model_filename}: {e}")
         raise SystemExit(1)
 
-print("[download_models] ✅ All models ready.")
+print("[download_models] [SUCCESS] All models ready.")
