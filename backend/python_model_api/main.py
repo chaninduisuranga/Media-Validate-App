@@ -119,17 +119,20 @@ def predict(file: UploadFile = File(...)):
             }
 
         try:
-            print("--- Preprocessing image... ---")
-            img_tensor, face_found = preprocess_image(contents)
+            print("--- Preprocessing image (face detection pass)... ---")
+            # First detect face using a neutral crop; then re-preprocess at correct size
+            _, face_found = preprocess_image(contents, use_face_size=False)
             
             if face_found:
-                print("--- ROUTING TO FACE MODEL ---")
+                print("--- ROUTING TO FACE MODEL (380x380) ---")
+                img_tensor, _ = preprocess_image(contents, use_face_size=True)
                 prediction = face_model.predict(img_tensor)[0][0]
-                used_model = "face_efficientnet"
+                used_model = "face_efficientnetb4"
             else:
-                print("--- ROUTING TO SCENE MODEL (CIFAKE) ---")
+                print("--- ROUTING TO SCENE MODEL (224x224) ---")
+                img_tensor, _ = preprocess_image(contents, use_face_size=False)
                 prediction = scene_model.predict(img_tensor)[0][0]
-                used_model = "scene_cifake"
+                used_model = "scene_artifact_efficientnetv2b0"
                 
             print(f"--- Inference Complete. Raw prediction: {prediction} ---")
                 
@@ -173,14 +176,17 @@ def predict(file: UploadFile = File(...)):
                     
                     # Convert BGR to RGB
                     frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    img_tensor, face_found = preprocess_image(cv2.imencode('.jpg', frame_rgb)[1].tobytes())
+                    frame_bytes = cv2.imencode('.jpg', frame_rgb)[1].tobytes()
+                    _, face_found = preprocess_image(frame_bytes, use_face_size=False)
                     
                     if face_found:
+                        img_tensor, _ = preprocess_image(frame_bytes, use_face_size=True)
                         pred = face_model.predict(img_tensor)[0][0]
-                        model_used_list.append("face_efficientnet")
+                        model_used_list.append("face_efficientnetb4")
                     else:
+                        img_tensor, _ = preprocess_image(frame_bytes, use_face_size=False)
                         pred = scene_model.predict(img_tensor)[0][0]
-                        model_used_list.append("scene_cifake")
+                        model_used_list.append("scene_artifact_efficientnetv2b0")
                     
                     predictions.append(pred)
 

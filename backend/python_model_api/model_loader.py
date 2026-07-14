@@ -3,8 +3,10 @@ import os
 import cv2
 import numpy as np
 
-# EfficientNetB4 resolution (face model) / EfficientNetV2B0 resolution (landscape model)
-IMAGE_SIZE = (380, 380)
+# Each model has its own required input resolution
+FACE_IMAGE_SIZE  = (380, 380)   # EfficientNetB4 - face detection model
+SCENE_IMAGE_SIZE = (224, 224)   # EfficientNetV2B0 - landscape/artifact model
+
 # Use absolute path detection to find models regardless of where the script is run
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 FACE_MODEL_PATH = os.path.join(BASE_DIR, "models", "efficientnet_b4_face_model.keras")
@@ -17,9 +19,7 @@ except Exception as e:
     print(f"Warning: OpenCV Haar initialization failed ({e}). Full image will be used.")
 
 def load_models():
-    """Loads both the Face and CIFAKE Scene models."""
-    # FACE_MODEL_PATH and SCENE_MODEL_PATH are already absolute paths (built from BASE_DIR)
-    # DO NOT join with dirname(__file__) again - that creates a broken double path
+    """Loads both the Face and ArtiFact Scene models."""
     print(f"BASE_DIR resolved to: {BASE_DIR}")
     print(f"Looking for Face Model at: {FACE_MODEL_PATH}")
     print(f"Looking for Scene Model at: {SCENE_MODEL_PATH}")
@@ -40,20 +40,28 @@ def load_models():
     
     if os.path.exists(FACE_MODEL_PATH):
         face_model = tf.keras.models.load_model(FACE_MODEL_PATH, compile=False)
-        print(f"Face Model loaded successfully from {FACE_MODEL_PATH}")
+        print(f"Face Model (EfficientNetB4, {FACE_IMAGE_SIZE}) loaded from {FACE_MODEL_PATH}")
     else:
         print(f"ERROR: Face Model file not found at {FACE_MODEL_PATH}")
         
     if os.path.exists(SCENE_MODEL_PATH):
         scene_model = tf.keras.models.load_model(SCENE_MODEL_PATH, compile=False)
-        print(f"CIFAKE Scene Model loaded successfully from {SCENE_MODEL_PATH}")
+        print(f"Scene Model (EfficientNetV2B0, {SCENE_IMAGE_SIZE}) loaded from {SCENE_MODEL_PATH}")
     else:
-        print(f"ERROR: CIFAKE Model file not found at {SCENE_MODEL_PATH}")
+        print(f"ERROR: Scene Model file not found at {SCENE_MODEL_PATH}")
         
     return face_model, scene_model
 
-def preprocess_image(image_bytes):
-    """Detects face, crops, resizes, and preprocesses. Returns (tensor, face_found)."""
+def preprocess_image(image_bytes, use_face_size=False):
+    """Detects face, crops, resizes, and preprocesses.
+    
+    Args:
+        image_bytes: Raw image bytes
+        use_face_size: If True, resize to FACE_IMAGE_SIZE (380x380).
+                       If False, resize to SCENE_IMAGE_SIZE (224x224).
+    Returns:
+        (tensor, face_found)
+    """
     # Convert bytes to numpy array
     nparr = np.frombuffer(image_bytes, np.uint8)
     img_bgr = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -110,9 +118,10 @@ def preprocess_image(image_bytes):
             if cropped_face.size != 0:
                 img_rgb = cropped_face
     
-    # 2. Resize and Format for TensorFlow
+    # 2. Resize to the correct size for the selected model
+    target_size = FACE_IMAGE_SIZE if use_face_size else SCENE_IMAGE_SIZE
     img_tensor = tf.convert_to_tensor(img_rgb)
-    img_tensor = tf.image.resize(img_tensor, IMAGE_SIZE)
+    img_tensor = tf.image.resize(img_tensor, target_size)
     img_tensor = tf.expand_dims(img_tensor, axis=0)
     
     # 3. EfficientNet preprocessing (works for both EfficientNetB4 and EfficientNetV2B0)
