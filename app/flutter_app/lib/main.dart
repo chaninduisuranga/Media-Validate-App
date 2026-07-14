@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:image_picker/image_picker.dart';
 import 'services/api_service.dart';
+import 'services/pdf_service.dart';
 import 'screens/login_screen.dart';
 import 'screens/splash_screen.dart';
 import 'screens/profile_screen.dart';
@@ -188,6 +189,7 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   File? _selectedFile;
   bool _isLoading = false;
+  bool _isGeneratingPdf = false;
   Map<String, dynamic>? _result;
   final ImagePicker _picker = ImagePicker();
 
@@ -225,6 +227,7 @@ class _HomeScreenState extends State<HomeScreen> {
         _result = response;
       });
     } catch (e) {
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('Error: $e'),
@@ -784,6 +787,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           'rating': selectedStars,
                           'comment': commentController.text,
                         });
+                        if (!context.mounted) return;
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
@@ -821,28 +825,104 @@ class _HomeScreenState extends State<HomeScreen> {
       icon = Icons.plagiarism;
     }
 
+    // Forensic detail lines for display
+    final forensicDetail = _result!['forensic_detail']?.toString() ?? '';
+    final forensicFlags = (_result!['forensic_flags'] as List?)?.cast<String>() ?? [];
+    final num? aiRawScore = _result!['ai_raw_score'] as num?;
+    final num? forensicPenalty = _result!['forensic_penalty'] as num?;
+    final phash = _result!['phash']?.toString();
+
     return AppCard(
       padding: const EdgeInsets.all(24),
       borderColor: color.withValues(alpha: 0.4),
       child: Column(
         children: [
+          // ── Verdict + Download icon row ──────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(icon, color: color, size: 28),
               const SizedBox(width: 12),
-              Text(
-                label,
-                style: GoogleFonts.outfit(
-                  fontSize: 20,
-                  fontWeight: FontWeight.w900,
-                  color: color,
-                  letterSpacing: 0.5,
+              Expanded(
+                child: Text(
+                  label,
+                  style: GoogleFonts.outfit(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    letterSpacing: 0.5,
+                  ),
+                ),
+              ),
+              // PDF Download button
+              Tooltip(
+                message: 'Download Forensic Report',
+                child: InkWell(
+                  onTap: _isGeneratingPdf
+                      ? null
+                      : () async {
+                          setState(() => _isGeneratingPdf = true);
+                          try {
+                            await generateAndShareForensicPdf(
+                              imageFile: _selectedFile,
+                              result: _result!,
+                              isReal: isReal,
+                            );
+                          } catch (e) {
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('PDF error: $e'),
+                                  backgroundColor: AppColors.danger,
+                                  behavior: SnackBarBehavior.floating,
+                                ),
+                              );
+                            }
+                          } finally {
+                            if (mounted) setState(() => _isGeneratingPdf = false);
+                          }
+                        },
+                  borderRadius: BorderRadius.circular(24),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          AppColors.primary.withValues(alpha: _isGeneratingPdf ? 0.3 : 0.15),
+                          AppColors.primary.withValues(alpha: _isGeneratingPdf ? 0.1 : 0.05),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(
+                        color: AppColors.primary.withValues(alpha: 0.4),
+                        width: 1.0,
+                      ),
+                    ),
+                    child: _isGeneratingPdf
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: AppColors.primary,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.picture_as_pdf_rounded,
+                            color: AppColors.primary,
+                            size: 20,
+                          ),
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 20),
+
+          // ── Confidence bar ───────────────────────────────────
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -873,6 +953,32 @@ class _HomeScreenState extends State<HomeScreen> {
               minHeight: 10,
             ),
           ),
+
+          // ── Score chips row ──────────────────────────────────
+          if (aiRawScore != null || forensicPenalty != null) ...[
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                if (aiRawScore != null)
+                  _ScoreChip(
+                    label: 'AI Score',
+                    value: '${(aiRawScore * 100).toStringAsFixed(1)}%',
+                    color: AppColors.secondary,
+                  ),
+                if (aiRawScore != null) const SizedBox(width: 8),
+                if (forensicPenalty != null)
+                  _ScoreChip(
+                    label: 'Forensic Penalty',
+                    value: '${(forensicPenalty * 100).toStringAsFixed(1)}%',
+                    color: forensicPenalty > 0.3
+                        ? AppColors.warning
+                        : AppColors.success,
+                  ),
+              ],
+            ),
+          ],
+
+          // ── Structural pipeline ──────────────────────────────
           if (_result!['go_results'] != null) ...[
             const SizedBox(height: 24),
             Container(
@@ -918,6 +1024,82 @@ class _HomeScreenState extends State<HomeScreen> {
               );
             }).toList()),
           ],
+
+          // ── Forensic flags ───────────────────────────────────
+          if (forensicFlags.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.bgElevated,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'FORENSIC FLAGS',
+                style: GoogleFonts.outfit(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textMuted,
+                  letterSpacing: 1.0,
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: forensicFlags
+                  .map((f) => _ForensicFlagChip(label: f))
+                  .toList(),
+            ),
+          ],
+
+          // ── Forensic detail text ─────────────────────────────
+          if (forensicDetail.isNotEmpty) ...[
+            const SizedBox(height: 16),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.bgElevated,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: AppColors.border.withValues(alpha: 0.5),
+                ),
+              ),
+              child: Text(
+                forensicDetail,
+                style: GoogleFonts.sourceCodePro(
+                  fontSize: 10,
+                  color: AppColors.textSecondary,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ],
+
+          // ── pHash ────────────────────────────────────────────
+          if (phash != null && phash.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Row(
+              children: [
+                const Icon(Icons.fingerprint, size: 14, color: AppColors.textMuted),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'pHash: $phash',
+                    style: GoogleFonts.sourceCodePro(
+                      fontSize: 9,
+                      color: AppColors.textMuted,
+                    ),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+
+          // ── Reset button ─────────────────────────────────────
           const SizedBox(height: 20),
           TextButton(
             onPressed: () => setState(() {
@@ -1021,6 +1203,90 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Score Chip Widget ────────────────────────────────────────────────────────
+
+class _ScoreChip extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+
+  const _ScoreChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 9,
+              color: AppColors.textMuted,
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            value,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─── Forensic Flag Chip ───────────────────────────────────────────────────────
+
+class _ForensicFlagChip extends StatelessWidget {
+  final String label;
+  const _ForensicFlagChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: AppColors.warning.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.warning.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.flag_rounded, size: 11, color: AppColors.warning),
+          const SizedBox(width: 4),
+          Text(
+            label.replaceAll('_', ' ').toUpperCase(),
+            style: GoogleFonts.outfit(
+              fontSize: 9,
+              fontWeight: FontWeight.bold,
+              color: AppColors.warning,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ],
       ),
     );
   }
