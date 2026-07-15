@@ -223,10 +223,19 @@ def predict(file: UploadFile = File(...)):
             _, face_found = preprocess_image(contents, use_face_size=False)
 
             if face_found:
-                print("--- FACE MODEL (380×380) ---")
-                img_tensor, _ = preprocess_image(contents, use_face_size=True)
-                raw_ai = float(face_model.predict(img_tensor)[0][0])
-                used_model = "face_efficientnetb4"
+                print("--- DUAL MODEL RUN (Face + Scene) ---")
+                # Run Face Model (deepfake / face-swap check)
+                face_tensor, _ = preprocess_image(contents, use_face_size=True)
+                face_pred = float(face_model.predict(face_tensor)[0][0])
+
+                # Run Scene Model (AI generated / GAN / Diffusion check)
+                scene_tensor, _ = preprocess_image(contents, use_face_size=False)
+                scene_pred = float(scene_model.predict(scene_tensor)[0][0])
+
+                # Combined score: if either model detects fake, we go with the lowest score
+                raw_ai = min(face_pred, scene_pred)
+                used_model = f"dual_inference (face: {face_pred:.2f}, scene: {scene_pred:.2f})"
+                print(f"[AI] Face Pred: {face_pred:.4f} | Scene Pred: {scene_pred:.4f} | Combined: {raw_ai:.4f}")
             else:
                 print("--- SCENE MODEL (224×224) ---")
                 img_tensor, _ = preprocess_image(contents, use_face_size=False)
@@ -336,9 +345,16 @@ def predict(file: UploadFile = File(...)):
 
                 _, face_found = preprocess_image(fbytes, use_face_size=False)
                 if face_found:
-                    img_tensor, _ = preprocess_image(fbytes, use_face_size=True)
-                    pred = float(face_model.predict(img_tensor)[0][0])
-                    model_used_list.append("face_efficientnetb4")
+                    # Run Face Model (deepfake / face-swap check)
+                    face_tensor, _ = preprocess_image(fbytes, use_face_size=True)
+                    face_pred = float(face_model.predict(face_tensor)[0][0])
+
+                    # Run Scene Model (AI generated / GAN / Diffusion check)
+                    scene_tensor, _ = preprocess_image(fbytes, use_face_size=False)
+                    scene_pred = float(scene_model.predict(scene_tensor)[0][0])
+
+                    pred = min(face_pred, scene_pred)
+                    model_used_list.append(f"dual_frame (face: {face_pred:.2f}, scene: {scene_pred:.2f})")
                 else:
                     img_tensor, _ = preprocess_image(fbytes, use_face_size=False)
                     pred = float(scene_model.predict(img_tensor)[0][0])
