@@ -274,7 +274,7 @@ def predict(file: UploadFile = File(...)):
         final_score = _weighted_final_score(raw_ai, forensic_penalty)
         print(f"[FINAL] combined_score={final_score:.4f}")
 
-        THRESHOLD = 0.40
+        THRESHOLD = 0.55
         is_real   = final_score > THRESHOLD
         label     = "real" if is_real else "edited"
         confidence = final_score if is_real else 1.0 - final_score
@@ -397,7 +397,7 @@ def predict(file: UploadFile = File(...)):
             print(f"[FINAL-VIDEO] combined={final_score:.4f}")
 
             # Videos use lower threshold (compression hurts quality)
-            THRESHOLD_VID = 0.25
+            THRESHOLD_VID = 0.40
             is_real        = final_score > THRESHOLD_VID
             label          = "real" if is_real else "edited"
             confidence     = final_score if is_real else 1.0 - final_score
