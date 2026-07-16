@@ -1099,16 +1099,56 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ],
 
-          // ── Reset button ─────────────────────────────────────
+          // ── Scan Another button ───────────────────────────────
           const SizedBox(height: 20),
-          TextButton(
-            onPressed: () => setState(() {
-              _selectedFile = null;
-              _result = null;
-            }),
-            child: const Text(
-              'Reset Scanner',
-              style: TextStyle(fontWeight: FontWeight.bold),
+          GestureDetector(
+            onTap: () {
+              setState(() {
+                _selectedFile = null;
+                _result = null;
+              });
+              // Scroll back to top automatically
+              Future.delayed(const Duration(milliseconds: 50), () {
+                if (mounted) _showPickerOptions();
+              });
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 14),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [AppColors.primary, AppColors.secondary],
+                  begin: Alignment.centerLeft,
+                  end: Alignment.centerRight,
+                ),
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.30),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(
+                    Icons.add_photo_alternate_rounded,
+                    color: Colors.white,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Scan Another Photo / Video',
+                    style: GoogleFonts.outfit(
+                      fontSize: 15,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
