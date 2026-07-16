@@ -4,16 +4,32 @@ import uvicorn
 import numpy as np
 import cv2
 import os
+import sys
+import traceback
 print("DEBUG cv2 path:", getattr(cv2, "__file__", "no __file__"))
 try:
-    cv2_dir = os.path.dirname(cv2.__file__)
-    print("DEBUG cv2 dir contents:", os.listdir(cv2_dir))
-    # Check for config files
-    config_dir = os.path.join(cv2_dir, "config")
-    if os.path.exists(config_dir):
-        print("DEBUG cv2 config contents:", os.listdir(config_dir))
+    cv2_init_path = getattr(cv2, "__file__", "")
+    if cv2_init_path and os.path.exists(cv2_init_path):
+        with open(cv2_init_path, "r", encoding="utf-8") as f:
+            print("--- cv2 __init__.py ---")
+            print(f.read()[:1500]) # print first 1500 chars
+            print("-----------------------")
+    
+    # Try loading native module directly to check for shared library errors
+    import importlib.machinery
+    import importlib.util
+    cv2_dir = os.path.dirname(cv2_init_path)
+    so_file = os.path.join(cv2_dir, "cv2.abi3.so")
+    if os.path.exists(so_file):
+        print(f"DEBUG cv2.abi3.so exists, attempting direct load...")
+        loader = importlib.machinery.ExtensionFileLoader("native_cv2", so_file)
+        spec = importlib.util.spec_from_loader("native_cv2", loader)
+        native_module = importlib.util.module_from_spec(spec)
+        loader.exec_module(native_module)
+        print("DEBUG native_cv2 load SUCCESS! attributes:", dir(native_module)[:10])
 except Exception as e:
-    print("DEBUG cv2 error:", e)
+    print("DEBUG cv2 diagnostic failed:")
+    traceback.print_exc()
 import io
 import os
 import threading
