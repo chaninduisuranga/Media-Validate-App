@@ -295,9 +295,50 @@ class _HomeScreenState extends State<HomeScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 40),
-                  Expanded(child: _buildUploadZone()),
-                  const SizedBox(height: 30),
-                  if (_result != null) _buildResultCard(),
+                  if (_result == null) ...[
+                    Expanded(child: _buildUploadZone()),
+                  ] else ...[
+                    Expanded(
+                      child: SingleChildScrollView(
+                        physics: const BouncingScrollPhysics(),
+                        child: Column(
+                          children: [
+                            Container(
+                              height: 120,
+                              width: double.infinity,
+                              decoration: BoxDecoration(
+                                color: AppColors.bgSurface,
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(color: AppColors.border),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: _selectedFile!.path.toLowerCase().endsWith('.mp4') ||
+                                        _selectedFile!.path.toLowerCase().endsWith('.mov')
+                                    ? Container(
+                                        color: AppColors.bgElevated,
+                                        child: const Row(
+                                          mainAxisAlignment: MainAxisAlignment.center,
+                                          children: [
+                                            Icon(Icons.movie_creation_outlined, color: AppColors.textSecondary),
+                                            SizedBox(width: 8),
+                                            Text(
+                                              'Verified Video',
+                                              style: TextStyle(color: AppColors.textSecondary),
+                                            ),
+                                          ],
+                                        ),
+                                      )
+                                    : Image.file(_selectedFile!, fit: BoxFit.cover),
+                              ),
+                            ),
+                            const SizedBox(height: 20),
+                            _buildResultCard(),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(height: 20),
                   if (_selectedFile != null && _result == null)
                     GradientButton(
@@ -321,8 +362,20 @@ class _HomeScreenState extends State<HomeScreen> {
       children: [
         Builder(
           builder: (context) => IconButton(
-            icon: const Icon(Icons.menu_rounded, size: 28),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+            icon: Icon(
+              _result != null ? Icons.arrow_back_rounded : Icons.menu_rounded,
+              size: 28,
+            ),
+            onPressed: () {
+              if (_result != null) {
+                setState(() {
+                  _selectedFile = null;
+                  _result = null;
+                });
+              } else {
+                Scaffold.of(context).openDrawer();
+              }
+            },
           ),
         ),
         Container(
