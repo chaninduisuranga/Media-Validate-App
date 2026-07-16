@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 
 # Each model has its own required input resolution
-FACE_IMAGE_SIZE  = (380, 380)   # EfficientNetB4 - face detection model
+FACE_IMAGE_SIZE  = (224, 224)   # Face model expects 224x224
 SCENE_IMAGE_SIZE = (224, 224)   # EfficientNetV2B0 - landscape/artifact model
 
 # Use absolute path detection to find models regardless of where the script is run
@@ -77,7 +77,7 @@ def preprocess_image(image_bytes, use_face_size=False):
     
     Args:
         image_bytes: Raw image bytes
-        use_face_size: If True, resize to FACE_IMAGE_SIZE (380x380).
+        use_face_size: If True, resize to FACE_IMAGE_SIZE (224x224).
                        If False, resize to SCENE_IMAGE_SIZE (224x224).
     Returns:
         (tensor, face_found)
