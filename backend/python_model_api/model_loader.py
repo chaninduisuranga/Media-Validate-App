@@ -12,7 +12,16 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 FACE_MODEL_PATH = os.path.join(BASE_DIR, "models", "efficientnet_b4_face_model.keras")
 SCENE_MODEL_PATH = os.path.join(BASE_DIR, "models", "artifact_efficientnetv2b0.keras")
 
-# Initialize multiple cascades for robust face detection
+# Initialize MTCNN Face Detection
+_mtcnn_detector = None
+try:
+    from mtcnn import MTCNN
+    _mtcnn_detector = MTCNN()
+    print("MTCNN Face Detector initialized successfully for inference API.")
+except Exception as e:
+    print(f"Warning: MTCNN initialization failed ({e}). Falling back to Haar Cascades.")
+
+# Initialize multiple cascades for robust face detection (fallback)
 cascades = {}
 cascade_names = {
     "alt2": "haarcascade_frontalface_alt2.xml",
@@ -26,10 +35,8 @@ for key, filename in cascade_names.items():
         cascade = cv2.CascadeClassifier(path)
         if not cascade.empty():
             cascades[key] = cascade
-        else:
-            print(f"Warning: Cascade {filename} is empty")
     except Exception as e:
-        print(f"Warning: Failed to load cascade {filename}: {e}")
+        pass
 
 def load_models():
     """Loads both the Face and ArtiFact Scene models."""
@@ -86,10 +93,32 @@ def preprocess_image(image_bytes, use_face_size=False):
     
     # 1. Face Extraction
     face_found = False
+    crop = None
+    h, w, _ = img_rgb.shape
     
-    if cascades:
-        h, w, _ = img_rgb.shape
-        
+    # Try MTCNN first (deep learning-based, highly robust)
+    if _mtcnn_detector is not None:
+        try:
+            results = _mtcnn_detector.detect_faces(img_rgb)
+            if results:
+                print(f"MTCNN: Found {len(results)} face(s)")
+                # Get the first face detection (usually the primary one)
+                detection = results[0]
+                x, y, box_w, box_h = detection['box']
+                
+                # Keep within bounds
+                xmin = max(0, x)
+                ymin = max(0, y)
+                box_w = min(box_w, w - xmin)
+                box_h = min(box_h, h - ymin)
+                
+                crop = (xmin, ymin, box_w, box_h)
+                face_found = True
+        except Exception as e:
+            print(f"Warning: MTCNN processing failed ({e}). Trying Haar Cascades...")
+            
+    # Try OpenCV Haar Cascades if MediaPipe failed or isn't initialized
+    if not face_found and cascades:
         # VERY IMPORTANT: Downscale a copy strictly for detection to avoid high-res misses
         scale_ratio = 800.0 / max(h, w)
         if scale_ratio < 1.0:
@@ -124,24 +153,29 @@ def preprocess_image(image_bytes, use_face_size=False):
             faces = sorted(faces, key=lambda f: f[2]*f[3], reverse=True)
             x_s, y_s, bw_s, bh_s = faces[0]
             
-            # Map back to original ultra-HD resolution
-            x = int(x_s / scale_ratio)
-            y = int(y_s / scale_ratio)
-            bw = int(bw_s / scale_ratio)
-            bh = int(bh_s / scale_ratio)
+            # Map back to original resolution
+            xmin = int(x_s / scale_ratio)
+            ymin = int(y_s / scale_ratio)
+            box_w = int(bw_s / scale_ratio)
+            box_h = int(bh_s / scale_ratio)
             
-            padding = 0.2
-            pad_x = int(bw * padding)
-            pad_y = int(bh * padding)
-            
-            xmin = max(0, x - pad_x)
-            ymin = max(0, y - pad_y)
-            xmax = min(w, x + bw + 2 * pad_x)
-            ymax = min(h, y + bh + 2 * pad_y)
-            
-            cropped_face = img_rgb[ymin:ymax, xmin:xmax]
-            if cropped_face.size != 0:
-                img_rgb = cropped_face
+            crop = (xmin, ymin, box_w, box_h)
+
+    # Crop the face if found with some padding
+    if face_found and crop:
+        x, y, bw, bh = crop
+        padding = 0.2
+        pad_x = int(bw * padding)
+        pad_y = int(bh * padding)
+        
+        xmin_pad = max(0, x - pad_x)
+        ymin_pad = max(0, y - pad_y)
+        xmax_pad = min(w, x + bw + 2 * pad_x)
+        ymax_pad = min(h, y + bh + 2 * pad_y)
+        
+        cropped_face = img_rgb[ymin_pad:ymax_pad, xmin_pad:xmax_pad]
+        if cropped_face.size != 0:
+            img_rgb = cropped_face
     
     # 2. Resize to the correct size for the selected model
     target_size = FACE_IMAGE_SIZE if use_face_size else SCENE_IMAGE_SIZE

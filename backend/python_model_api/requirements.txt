@@ -6,3 +6,4 @@ opencv-python-headless
 tensorflow>=2.15.0
 pillow
 psutil
+mtcnn
