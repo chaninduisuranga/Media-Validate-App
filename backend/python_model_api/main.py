@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import numpy as np
 import cv2
+print("DEBUG cv2 path:", getattr(cv2, "__file__", "no __file__"))
+print("DEBUG cv2 dir:", dir(cv2)[:20])
 import io
 import os
 import threading
