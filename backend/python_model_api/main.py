@@ -3,8 +3,17 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 import numpy as np
 import cv2
+import os
 print("DEBUG cv2 path:", getattr(cv2, "__file__", "no __file__"))
-print("DEBUG cv2 dir:", dir(cv2)[:20])
+try:
+    cv2_dir = os.path.dirname(cv2.__file__)
+    print("DEBUG cv2 dir contents:", os.listdir(cv2_dir))
+    # Check for config files
+    config_dir = os.path.join(cv2_dir, "config")
+    if os.path.exists(config_dir):
+        print("DEBUG cv2 config contents:", os.listdir(config_dir))
+except Exception as e:
+    print("DEBUG cv2 error:", e)
 import io
 import os
 import threading
