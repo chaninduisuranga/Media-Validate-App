@@ -12,11 +12,24 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fil
 FACE_MODEL_PATH = os.path.join(BASE_DIR, "models", "efficientnet_b4_face_model.keras")
 SCENE_MODEL_PATH = os.path.join(BASE_DIR, "models", "artifact_efficientnetv2b0.keras")
 
-try:
-    face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
-except Exception as e:
-    face_cascade = None
-    print(f"Warning: OpenCV Haar initialization failed ({e}). Full image will be used.")
+# Initialize multiple cascades for robust face detection
+cascades = {}
+cascade_names = {
+    "alt2": "haarcascade_frontalface_alt2.xml",
+    "default": "haarcascade_frontalface_default.xml",
+    "profile": "haarcascade_profileface.xml"
+}
+
+for key, filename in cascade_names.items():
+    try:
+        path = cv2.data.haarcascades + filename
+        cascade = cv2.CascadeClassifier(path)
+        if not cascade.empty():
+            cascades[key] = cascade
+        else:
+            print(f"Warning: Cascade {filename} is empty")
+    except Exception as e:
+        print(f"Warning: Failed to load cascade {filename}: {e}")
 
 def load_models():
     """Loads both the Face and ArtiFact Scene models."""
@@ -74,7 +87,7 @@ def preprocess_image(image_bytes, use_face_size=False):
     # 1. Face Extraction
     face_found = False
     
-    if face_cascade is not None and not face_cascade.empty():
+    if cascades:
         h, w, _ = img_rgb.shape
         
         # VERY IMPORTANT: Downscale a copy strictly for detection to avoid high-res misses
@@ -87,9 +100,21 @@ def preprocess_image(image_bytes, use_face_size=False):
             detect_img = img_rgb
             scale_ratio = 1.0
 
-        # Run OpenCV Haar Cascade
+        # Run OpenCV Haar Cascades
         gray = cv2.cvtColor(detect_img, cv2.COLOR_RGB2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+        
+        faces = []
+        # Try frontal face alt2 first (highly accurate, fewer false negatives)
+        if "alt2" in cascades:
+            faces = cascades["alt2"].detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(20, 20))
+            
+        # Try frontal face default next if no faces found
+        if len(faces) == 0 and "default" in cascades:
+            faces = cascades["default"].detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(20, 20))
+            
+        # Try profile face last if still no faces found
+        if len(faces) == 0 and "profile" in cascades:
+            faces = cascades["profile"].detectMultiScale(gray, scaleFactor=1.05, minNeighbors=3, minSize=(20, 20))
 
         if len(faces) > 0:
             print(f"OpenCV: Found {len(faces)} face(s)")
