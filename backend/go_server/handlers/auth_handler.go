@@ -5,12 +5,32 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/mediavalidate/go_server/models"
 	"golang.org/x/crypto/bcrypt"
+)
+
+// ── Compiled validation regexes ───────────────────────────────────────────────
+var (
+	// Standard email pattern
+	emailRegex = regexp.MustCompile(`^[\w.+\-]+@[a-zA-Z\d\-]+\.[a-zA-Z]{2,}$`)
+
+	// Sri Lanka mobile: 07X XXXXXXX (10 digits, prefix 070-079)
+	// Also accepts +94 or 94 country code prefix
+	lkPhoneRegex = regexp.MustCompile(`^(\+94|94)?0?(7[0-9])\d{7}$`)
+
+	// Password: min 8 chars, uppercase, digit, special char
+	passwordUpperRegex   = regexp.MustCompile(`[A-Z]`)
+	passwordDigitRegex   = regexp.MustCompile(`[0-9]`)
+	passwordSpecialRegex = regexp.MustCompile(`[!@#\$&*~%^()_\-+=<>?/]`)
+
+	// Name: letters, spaces, hyphens, apostrophes
+	nameRegex = regexp.MustCompile(`^[a-zA-Z\s'\-]+$`)
 )
 
 var DBPool *pgxpool.Pool
@@ -80,8 +100,67 @@ func SignupHandler(c echo.Context) error {
 		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Invalid request"})
 	}
 
-	if req.Email == "" || req.Password == "" {
-		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Email and password are required"})
+	// ── Field-level validation ────────────────────────────────────────────────
+
+	// Trim whitespace
+	req.FirstName = strings.TrimSpace(req.FirstName)
+	req.LastName = strings.TrimSpace(req.LastName)
+	req.Email = strings.TrimSpace(req.Email)
+	req.PhoneNo = strings.TrimSpace(req.PhoneNo)
+	req.Address = strings.TrimSpace(req.Address)
+
+	if req.FirstName == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "First name is required"})
+	}
+	if len(req.FirstName) < 2 || !nameRegex.MatchString(req.FirstName) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "First name must be at least 2 letters (letters only)"})
+	}
+
+	if req.LastName == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Last name is required"})
+	}
+	if len(req.LastName) < 2 || !nameRegex.MatchString(req.LastName) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Last name must be at least 2 letters (letters only)"})
+	}
+
+	if req.Email == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Email is required"})
+	}
+	if !emailRegex.MatchString(req.Email) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Enter a valid email address"})
+	}
+
+	if req.Password == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password is required"})
+	}
+	if len(req.Password) < 8 {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password must be at least 8 characters"})
+	}
+	if !passwordUpperRegex.MatchString(req.Password) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password must contain at least one uppercase letter"})
+	}
+	if !passwordDigitRegex.MatchString(req.Password) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password must contain at least one number"})
+	}
+	if !passwordSpecialRegex.MatchString(req.Password) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password must contain at least one special character (!@#$&*~...)"})
+	}
+
+	// Normalise and validate Sri Lanka phone number
+	// Strip spaces, hyphens, parentheses then check pattern
+	cleanPhone := strings.NewReplacer(" ", "", "-", "", "(", "", ")", "").Replace(req.PhoneNo)
+	if cleanPhone == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Phone number is required"})
+	}
+	if !lkPhoneRegex.MatchString(cleanPhone) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Enter a valid Sri Lanka mobile number (e.g. 077XXXXXXX, 078XXXXXXX)"})
+	}
+
+	if req.Address == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Address is required"})
+	}
+	if len(req.Address) < 5 {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Please provide a more detailed address"})
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
@@ -124,6 +203,22 @@ func LoginHandler(c echo.Context) error {
 	req := new(models.LoginRequest)
 	if err := c.Bind(req); err != nil {
 		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Invalid request"})
+	}
+
+	// ── Login field validation ────────────────────────────────────────────────
+	req.Email = strings.TrimSpace(req.Email)
+
+	if req.Email == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Email is required"})
+	}
+	if !emailRegex.MatchString(req.Email) {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Enter a valid email address"})
+	}
+	if req.Password == "" {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password is required"})
+	}
+	if len(req.Password) < 8 {
+		return c.JSON(http.StatusBadRequest, models.AuthResponse{Success: false, Message: "Password must be at least 8 characters"})
 	}
 
 	var user models.User

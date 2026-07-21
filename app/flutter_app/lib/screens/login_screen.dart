@@ -13,22 +13,36 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
   bool _isPasswordVisible = false;
 
-  Future<void> _login() async {
-    if (_emailController.text.isEmpty || _passwordController.text.isEmpty) {
-      _showError('Input credentials missing');
-      return;
+  // ── Validators ────────────────────────────────────────────
+
+  String? _validateEmail(String? v) {
+    if (v == null || v.trim().isEmpty) return 'Email is required';
+    if (!RegExp(r'^[\w.+\-]+@[a-zA-Z\d\-]+\.[a-zA-Z]{2,}$').hasMatch(v.trim())) {
+      return 'Enter a valid email address';
     }
+    return null;
+  }
+
+  String? _validatePassword(String? v) {
+    if (v == null || v.isEmpty) return 'Password is required';
+    if (v.length < 8) return 'Password must be at least 8 characters';
+    return null;
+  }
+
+  Future<void> _login() async {
+    if (!_formKey.currentState!.validate()) return;
 
     setState(() => _isLoading = true);
 
     try {
       final response = await ApiService.login(
-        _emailController.text,
+        _emailController.text.trim(),
         _passwordController.text,
       );
 
@@ -88,7 +102,9 @@ class _LoginScreenState extends State<LoginScreen> {
             child: Center(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.symmetric(horizontal: 32.0),
-                child: Column(
+                child: Form(
+                  key: _formKey,
+                  child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
@@ -123,6 +139,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 32),
                     _buildSecondaryAction(),
                   ],
+                ),
                 ),
               ),
             ),
@@ -161,16 +178,19 @@ class _LoginScreenState extends State<LoginScreen> {
   Widget _buildInputGroup() {
     return Column(
       children: [
-        TextField(
+        TextFormField(
           controller: _emailController,
+          keyboardType: TextInputType.emailAddress,
+          autocorrect: false,
           decoration: const InputDecoration(
             hintText: 'Email',
             prefixIcon: Icon(Icons.alternate_email_rounded, size: 20),
           ),
           style: GoogleFonts.outfit(),
+          validator: _validateEmail,
         ),
         const SizedBox(height: 20),
-        TextField(
+        TextFormField(
           controller: _passwordController,
           obscureText: !_isPasswordVisible,
           decoration: InputDecoration(
@@ -188,6 +208,7 @@ class _LoginScreenState extends State<LoginScreen> {
             ),
           ),
           style: GoogleFonts.outfit(),
+          validator: _validatePassword,
         ),
       ],
     );
